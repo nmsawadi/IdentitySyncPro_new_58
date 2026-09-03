@@ -1,0 +1,73 @@
+@model IdentitySyncPro.Core.Models.Governance.GovNhiAccount
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+
+    // The state and the directory effect are two badges because they are two facts. "Quarantined"
+    // is a decision this system took; "disabled" is something that happened in a directory and may
+    // well have failed. One combined pill would let a quarantine that did nothing read as done.
+    (string Badge, string Icon, string Label) State(string s) => s switch
+    {
+        "Discovered"  => ("badge-warning",   "bi-question-circle-fill", isAr ? "بلا مالك" : "Unowned"),
+        "Claimed"     => ("badge-success",   "bi-person-check-fill",    isAr ? "له مالك" : "Owned"),
+        "Quarantined" => ("badge-danger",    "bi-shield-exclamation",   isAr ? "محجور" : "Quarantined"),
+        "Exempt"      => ("badge-info",      "bi-shield-slash",         isAr ? "مستثنى" : "Exempt"),
+        "Retired"     => ("badge-secondary", "bi-archive",              isAr ? "غادر الدليل" : "Gone from the directory"),
+        _             => ("badge-secondary", "bi-dot",                  s)
+    };
+
+    var s = State(Model.State);
+}
+
+<span class="badge @s.Badge"><i class="bi @s.Icon me-1"></i>@s.Label</span>
+
+@if (Model.IsSelfAccount)
+{
+    @* Stated wherever this account appears, because it changes what every other fact on the row
+       means — and because it is never quarantined however long it goes unclaimed. *@
+    <span class="badge badge-info ms-1" title="@(isAr ? "لا يُحجر أبداً — تعطيله يوقف المزامنة وإعادة تعيين كلمات المرور والدخول بحسابات AD" : "Never quarantined — disabling it would stop syncing, password resets and AD sign-in")">
+        <i class="bi bi-gear-fill me-1"></i>@(isAr ? "حساب ربط النظام" : "System bind account")
+    </span>
+}
+
+@if (Model.Privileged)
+{
+    <span class="badge badge-danger ms-1">
+        <i class="bi bi-key-fill me-1"></i>@(isAr ? "صلاحيات إدارية" : "Privileged")
+    </span>
+}
+
+@if (!Model.Enabled)
+{
+    <span class="badge badge-secondary ms-1">
+        <i class="bi bi-pause-circle me-1"></i>@(isAr ? "معطّل" : "Disabled")
+    </span>
+}
+
+@if (Model.State == "Quarantined")
+{
+    @if (Model.QuarantineEffect == "Disabled")
+    {
+        <span class="badge badge-danger ms-1">
+            <i class="bi bi-power me-1"></i>@(isAr ? "عُطّل في الدليل" : "Disabled in the directory")
+        </span>
+    }
+    else if (Model.QuarantineEffect == "PrivilegeRemoved")
+    {
+        <span class="badge badge-warning ms-1">
+            <i class="bi bi-key me-1"></i>@(isAr ? "سُحبت صلاحياته" : "Privileges removed")
+        </span>
+    }
+    else if (Model.QuarantineEffect == "Failed")
+    {
+        @* Never quiet: the system decided to quarantine, and the directory did not comply. *@
+        <span class="badge badge-danger ms-1" title="@Model.QuarantineError">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>@(isAr ? "لم يُنفَّذ في الدليل" : "Not applied in the directory")
+        </span>
+    }
+    else
+    {
+        <span class="badge badge-secondary ms-1" title="@Model.QuarantineError">
+            <i class="bi bi-journal-text me-1"></i>@(isAr ? "تسجيل فقط" : "Recorded only")
+        </span>
+    }
+}

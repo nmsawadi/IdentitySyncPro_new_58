@@ -1,0 +1,766 @@
+@model List<IdentitySyncPro.Core.Models.Metaverse.MetaverseEntry>
+@{
+    ViewData["Title"] = ViewBag.Lang == "en" ? "Lifecycle Management" : "إدارة دورة الحياة";
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    var stats = ViewBag.Stats as IdentitySyncPro.Core.Interfaces.LifecycleStats;
+    var rules = ViewBag.Rules as List<IdentitySyncPro.Core.Models.Rules.LifecycleRule> ?? new();
+    var transitions = ViewBag.RecentTransitions as List<IdentitySyncPro.Core.Models.Metaverse.MetaverseHistory> ?? new();
+    // Multi-tenant: each tenant has its own lifecycle rules and its own metaverse entries.
+    // Null selection = viewing every tenant, with a Tenant column in the tables.
+    var tenants = ViewBag.Tenants as List<(int Id, string TenantName, bool IsActive)> ?? new List<(int, string, bool)>();
+    var tenantNames = ViewBag.TenantNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var selectedTenantId = ViewBag.TenantId as int?;
+    var showTenant = tenants.Count > 1;
+}
+
+@if (showTenant)
+{
+    <div class="card glass-card border-0 mb-3">
+        <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+            <span class="fs-sm text-muted">
+                <i class="bi bi-building me-1"></i>@(isAr ? "الجهة" : "Tenant")
+            </span>
+            <select class="form-select form-select-sm form-glass" style="width:auto"
+                    onchange="location.href='@Url.Action("Index")?state=@ViewBag.State&tenantId=' + this.value">
+                <option value="">@(isAr ? "كل الجهات" : "All Tenants")</option>
+                @foreach (var t in tenants)
+                {
+                    <option value="@t.Id" selected="@(selectedTenantId == t.Id)">
+                        @t.TenantName@(t.IsActive ? "" : isAr ? " (غير نشطة)" : " (inactive)")
+                    </option>
+                }
+            </select>
+            <small class="text-muted">
+                @(isAr
+                    ? "الإحصاءات والقواعد والهويات والتحولات أدناه كلها تتبع هذا الاختيار."
+                    : "The counters, rules, identities and transitions below all follow this selection.")
+            </small>
+        </div>
+    </div>
+}
+
+<!-- Stats Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <i class="bi bi-collection-fill text-info fs-3"></i>
+                <h3 class="mb-0 mt-2" id="statTotal">@(stats?.TotalIdentities ?? 0)</h3>
+                <small class="text-muted">@(isAr ? "إجمالي الهويات" : "Total")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <i class="bi bi-hourglass-split text-warning fs-3"></i>
+                <h3 class="mb-0 mt-2" id="statPending">@(stats?.PendingCount ?? 0)</h3>
+                <small class="text-muted">@(isAr ? "قيد الانتظار" : "Pending")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <i class="bi bi-check-circle-fill text-success fs-3"></i>
+                <h3 class="mb-0 mt-2" id="statActive">@(stats?.ActiveCount ?? 0)</h3>
+                <small class="text-muted">@(isAr ? "نشط" : "Active")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <i class="bi bi-pause-circle-fill text-danger fs-3"></i>
+                <h3 class="mb-0 mt-2" id="statSuspended">@(stats?.SuspendedCount ?? 0)</h3>
+                <small class="text-muted">@(isAr ? "معلّق" : "Suspended")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <i class="bi bi-x-circle-fill text-secondary fs-3"></i>
+                <h3 class="mb-0 mt-2" id="statDeprovisioned">@(stats?.DeprovisionedCount ?? 0)</h3>
+                <small class="text-muted">@(isAr ? "محذوف" : "Deprovisioned")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Lifecycle Rules -->
+    <div class="col-lg-5">
+        <div class="card glass-card border-0">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-gear-wide-connected me-2"></i>@(isAr ? "قواعد دورة الحياة" : "Lifecycle Rules")</h5>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#ruleModal" onclick="openRuleModal()">
+                    <i class="bi bi-plus-lg"></i> @(isAr ? "إضافة" : "Add")
+                </button>
+            </div>
+            <div class="card-body p-0">
+                @if (rules.Count == 0)
+                {
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1"></i>
+                        <p class="mt-2">@(isAr ? "لا توجد قواعد بعد" : "No rules yet")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var rule in rules)
+                        {
+                            <div class="list-group-item bg-transparent d-flex align-items-center gap-2">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" @(rule.Enabled ? "checked" : "")
+                                           onchange="toggleRule(@rule.Id)">
+                                </div>
+                                <div class="flex-grow-1">
+                                    <strong>@rule.Name</strong>
+                                    @if (showTenant)
+                                    {
+                                        <span class="badge bg-secondary ms-2" title="@(isAr ? "الجهة" : "Tenant")">
+                                            <i class="bi bi-building me-1"></i>@(tenantNames.GetValueOrDefault(rule.TenantId) ?? "—")
+                                        </span>
+                                    }
+                                    <br>
+                                    <small class="text-muted">
+                                        @rule.TriggerType: @rule.ConditionField @rule.ConditionOperator @rule.ConditionValue → @rule.ActionType
+                                        @if (rule.GracePeriodDays.HasValue)
+                                        {
+                                            <span class="badge bg-warning text-dark">@rule.GracePeriodDays @(isAr ? "يوم" : "days")</span>
+                                        }
+                                    </small>
+                                </div>
+                                <span class="badge @(rule.Enabled ? "bg-success" : "bg-secondary")">P@rule.Priority</span>
+                                <button class="btn btn-sm btn-outline-info" title="@(isAr ? "تعديل" : "Edit")"
+                                        onclick="editRule(@rule.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(rule.Name)', '@rule.TriggerType', @rule.Priority, '@System.Web.HttpUtility.JavaScriptStringEncode(rule.ConditionField ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(rule.ConditionOperator ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(rule.ConditionValue ?? "")', '@rule.ActionType', '@System.Web.HttpUtility.JavaScriptStringEncode(rule.ActionValue ?? "")', '@(rule.GracePeriodDays?.ToString() ?? "")', @rule.TenantId)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteRule(@rule.Id)" title="@(isAr ? "حذف" : "Delete")">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Recent Transitions -->
+        <div class="card glass-card border-0 mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>@(isAr ? "آخر التحولات" : "Recent Transitions")</h5>
+            </div>
+            <div class="card-body p-0" style="max-height:300px;overflow-y:auto;">
+                @if (transitions.Count == 0)
+                {
+                    <p class="text-center text-muted py-4">@(isAr ? "لا توجد تحولات بعد" : "No transitions yet")</p>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var t in transitions)
+                        {
+                            <div class="list-group-item bg-transparent py-2">
+                                <div class="d-flex justify-content-between">
+                                    <span>
+                                        <span class="badge bg-secondary">@t.OldState</span>
+                                        <i class="bi bi-arrow-right mx-1"></i>
+                                        <span class="badge bg-primary">@t.NewState</span>
+                                    </span>
+                                    <small class="text-muted">@t.Timestamp.ToString("MM/dd HH:mm")</small>
+                                </div>
+                                <small class="text-muted">@t.Details</small>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Metaverse Identities Table -->
+    <div class="col-lg-7">
+        <div class="card glass-card border-0">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0"><i class="bi bi-database-fill me-2"></i>@(isAr ? "مخزن الهويات (Metaverse)" : "Metaverse Identities")</h5>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <form method="get" action="@Url.Action("Index")" class="d-flex">
+                        <input type="text" name="search" value="@ViewBag.Search"
+                               class="form-control form-control-sm @(isAr ? "text-end" : "")"
+                               placeholder="@(isAr ? "بحث بالرقم..." : "Search by ID...")">
+                        <input type="hidden" name="state" value="@ViewBag.State">
+                        <input type="hidden" name="tenantId" value="@selectedTenantId">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary @(isAr ? "me-2" : "ms-2")">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        @if (!string.IsNullOrEmpty(ViewBag.Search))
+                        {
+                            <a href="@Url.Action("Index", new { state = ViewBag.State, tenantId = selectedTenantId })" class="btn btn-sm btn-link text-danger">
+                                <i class="bi bi-x-lg"></i>
+                            </a>
+                        }
+                    </form>
+                    <div class="btn-group btn-group-sm">
+                        <a href="@Url.Action("Index", new { tenantId = selectedTenantId })" class="btn @(ViewBag.State == null ? "btn-primary" : "btn-outline-primary")">@(isAr ? "الكل" : "All")</a>
+                        <a href="@Url.Action("Index", new { state = "Active", tenantId = selectedTenantId })" class="btn @(ViewBag.State == "Active" ? "btn-success" : "btn-outline-success")">@(isAr ? "نشط" : "Active")</a>
+                        <a href="@Url.Action("Index", new { state = "Suspended", tenantId = selectedTenantId })" class="btn @(ViewBag.State == "Suspended" ? "btn-danger" : "btn-outline-danger")">@(isAr ? "معلّق" : "Suspended")</a>
+                        <a href="@Url.Action("Index", new { state = "Deprovisioned", tenantId = selectedTenantId })" class="btn @(ViewBag.State == "Deprovisioned" ? "btn-secondary" : "btn-outline-secondary")">@(isAr ? "موقوف" : "Deprovisioned")</a>
+                    </div>
+                    <button class="btn btn-sm btn-glow" onclick="processAllPending()" id="btnProcessAll">
+                        <i class="bi bi-play-fill me-1"></i>@(isAr ? "معالجة الكل" : "Process All")
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="lifecycleProgress" class="mx-3 mt-3 d-none">
+                    <!-- Phase Stepper for 3 stages -->
+                    <div class="phase-stepper mb-3" id="lcPhaseStepper">
+                        <div class="phase-step" id="lcPhase1">
+                            <div class="phase-icon"><i class="bi bi-database" id="lcPhaseIcon1"></i></div>
+                            <span class="phase-label">@(isAr ? "الاستيراد" : "Import")</span>
+                        </div>
+                        <div class="phase-connector" id="lcConn1">
+                            <div class="phase-connector-fill" id="lcConnFill1"></div>
+                        </div>
+                        <div class="phase-step" id="lcPhase2">
+                            <div class="phase-icon"><i class="bi bi-gear-wide-connected" id="lcPhaseIcon2"></i></div>
+                            <span class="phase-label">@(isAr ? "القواعد" : "Rules")</span>
+                        </div>
+                        <div class="phase-connector" id="lcConn2">
+                            <div class="phase-connector-fill" id="lcConnFill2"></div>
+                        </div>
+                        <div class="phase-step" id="lcPhase3">
+                            <div class="phase-icon"><i class="bi bi-cloud-upload" id="lcPhaseIcon3"></i></div>
+                            <span class="phase-label">@(isAr ? "التصدير" : "Export")</span>
+                        </div>
+                    </div>
+
+                    <!-- Phase Description -->
+                    <div class="text-center mb-2" id="lcPhaseDescContainer">
+                        <span class="phase-description-badge" id="lcPhaseDescBadge">
+                            <i class="bi bi-gear-fill" id="lcPhaseDescIcon"></i>
+                            <span id="lcPhaseDescText">—</span>
+                        </span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="text-muted" id="lcProgressStage"></small>
+                            <small class="fw-600 text-accent" id="lcProgressPct">0%</small>
+                        </div>
+                        <div class="progress-glass">
+                            <div class="progress-fill active" id="lcProgressBar" style="width:0%"></div>
+                        </div>
+                    </div>
+                    <small class="text-muted" id="lcProgressText"></small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>@(isAr ? "الرقم" : "ID")</th>
+                                @if (showTenant)
+                                {
+                                    <th>@(isAr ? "الجهة" : "Tenant")</th>
+                                }
+                                <th>@(isAr ? "الحالة" : "State")</th>
+                                <th>@(isAr ? "كود المصدر" : "Status Code")</th>
+                                <th>AD</th>
+                                <th>@(isAr ? "آخر استيراد" : "Last Import")</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Count == 0)
+                            {
+                                <tr><td colspan="@(showTenant ? 7 : 6)" class="text-center text-muted py-4">@(isAr ? "لا توجد هويات في Metaverse بعد" : "No entries in Metaverse yet")</td></tr>
+                            }
+                            @foreach (var entry in Model)
+                            {
+                                var stateClass = entry.LifecycleState switch
+                                {
+                                    "Active" => "bg-success",
+                                    "Pending" => "bg-warning text-dark",
+                                    "Suspended" => "bg-danger",
+                                    "Deprovisioned" => "bg-secondary",
+                                    _ => "bg-secondary"
+                                };
+                                <tr>
+                                    <td><code>@entry.ExternalId</code></td>
+                                    @if (showTenant)
+                                    {
+                                        <td><small class="text-muted">@(tenantNames.GetValueOrDefault(entry.TenantId) ?? "—")</small></td>
+                                    }
+                                    <td><span class="badge @stateClass">@entry.LifecycleState</span></td>
+                                    <td>@entry.SourceStatusCode <small class="text-muted">(@(entry.SourceStatusDesc ?? "—"))</small></td>
+                                    <td>
+                                        @if (entry.ADAccountEnabled)
+                                        {
+                                            <i class="bi bi-check-circle-fill text-success"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-x-circle text-muted"></i>
+                                        }
+                                    </td>
+                                    <td><small>@entry.LastImportDate.ToString("yyyy-MM-dd HH:mm")</small></td>
+                                    <td>
+                                        <a href="@Url.Action("Details", new { id = entry.ExternalId })" class="btn btn-sm btn-outline-info">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            @{
+                var pgBase = Url.Action("Index") + "?" +
+                    (!string.IsNullOrEmpty(ViewBag.State as string) ? $"state={ViewBag.State}&" : "") +
+                    (selectedTenantId.HasValue ? $"tenantId={selectedTenantId}&" : "") +
+                    "page=";
+            }
+            @await Html.PartialAsync("_SmartPagination", new ViewDataDictionary(ViewData) {
+                { "PgCurrent", (int)ViewBag.CurrentPage },
+                { "PgTotal", (int)ViewBag.TotalPages },
+                { "PgBaseUrl", pgBase }
+            })
+        </div>
+    </div>
+</div>
+
+<!-- Add Rule Modal -->
+<div class="modal fade" id="ruleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lcRuleModalTitle"><i class="bi bi-plus-circle me-2"></i>@(isAr ? "إضافة قاعدة" : "Add Lifecycle Rule")</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <input type="hidden" id="ruleEditId" value="0">
+            <div class="modal-body">
+                @if (showTenant)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">@(isAr ? "الجهة" : "Tenant")</label>
+                        <select class="form-select" id="ruleTenantId">
+                            @foreach (var t in tenants)
+                            {
+                                <option value="@t.Id" selected="@(selectedTenantId == t.Id)">
+                                    @t.TenantName@(t.IsActive ? "" : isAr ? " (غير نشطة)" : " (inactive)")
+                                </option>
+                            }
+                        </select>
+                        <small class="text-muted" id="ruleTenantHint">
+                            @(isAr ? "رموز الحالات والإجراءات تخصّ هذه الجهة وحدها." : "Status codes and actions apply to this tenant only.")
+                        </small>
+                    </div>
+                }
+                <div class="mb-3">
+                    <label class="form-label">@(isAr ? "اسم القاعدة" : "Rule Name")</label>
+                    <input type="text" class="form-control" id="ruleName" placeholder="e.g., Suspend Withdrawn Identities">
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label">@(isAr ? "نوع المحفز" : "Trigger")</label>
+                        <select class="form-select" id="ruleTrigger">
+                            <option value="OnImport">OnImport</option>
+                            <option value="OnSchedule">OnSchedule</option>
+                            <option value="OnStateChange">OnStateChange</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">@(isAr ? "الأولوية" : "Priority")</label>
+                        <input type="number" class="form-control" id="rulePriority" value="100">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-4">
+                        <label class="form-label">@(isAr ? "الحقل" : "Field")</label>
+                        <input type="text" class="form-control" id="ruleField" placeholder="STATUSE_CODE">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label">@(isAr ? "العملية" : "Op")</label>
+                        <select class="form-select" id="ruleOp">
+                            <option value="==">==</option>
+                            <option value="!=">!=</option>
+                            <option value="in">in</option>
+                            <option value="not_in">not_in</option>
+                        </select>
+                    </div>
+                    <div class="col-5">
+                        <label class="form-label">@(isAr ? "القيمة" : "Value")</label>
+                        <input type="text" class="form-control" id="ruleValue" placeholder="4,5,6">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label">@(isAr ? "الإجراء" : "Action")</label>
+                        <select class="form-select" id="ruleAction" onchange="updateActionValueHint()">
+                            <option value="SetState">SetState</option>
+                            <option value="MoveOU">MoveOU</option>
+                            <option value="DisableAD">DisableAD</option>
+                            <option value="EnableAD">EnableAD</option>
+                            <option value="RemoveGroups">RemoveGroups</option>
+                            <option value="AddGroups">AddGroups</option>
+                            <option value="SendSMS">SendSMS</option>
+                            <option value="Deprovision">Deprovision</option>
+                            <option value="Reactivate">Reactivate</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label" id="actionValueLabel">@(isAr ? "قيمة الإجراء" : "Action Value")</label>
+                        <input type="text" class="form-control" id="ruleActionValue" placeholder="Suspended">
+                        <small class="text-muted d-block mt-1" id="actionValueHint"></small>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">@(isAr ? "فترة السماح (أيام)" : "Grace Period (days)")</label>
+                    <input type="number" class="form-control" id="ruleGrace" placeholder="0 = immediate">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@(isAr ? "إلغاء" : "Cancel")</button>
+                <button type="button" class="btn btn-primary" onclick="saveRule()">
+                    <i class="bi bi-check-lg me-1"></i>@(isAr ? "حفظ" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    let editingId = 0;
+
+    // The tenant currently filtered on — null means "all tenants".
+    const lcSelectedTenantId = @(selectedTenantId?.ToString() ?? "null");
+    function lcTenantQuery(prefix) {
+        return lcSelectedTenantId ? prefix + 'tenantId=' + lcSelectedTenantId : '';
+    }
+
+    // A rule's tenant is fixed at creation — the select is editable only when adding.
+    function setRuleTenant(tenantId, locked) {
+        const sel = document.getElementById('ruleTenantId');
+        if (!sel) return; // single-tenant install: field not rendered
+        if (tenantId) sel.value = String(tenantId);
+        sel.disabled = !!locked;
+        const hint = document.getElementById('ruleTenantHint');
+        if (hint) hint.textContent = locked
+            ? '@(isAr ? "لا يمكن نقل قاعدة قائمة بين الجهات — أنشئ قاعدة جديدة في الجهة الأخرى." : "An existing rule cannot be moved between tenants — create a new one under the other tenant.")'
+            : '@(isAr ? "رموز الحالات والإجراءات تخصّ هذه الجهة وحدها." : "Status codes and actions apply to this tenant only.")';
+    }
+
+    function openRuleModal() {
+        editingId = 0;
+        // Default to the tenant currently being filtered on, else the first in the list.
+        setRuleTenant(@(selectedTenantId?.ToString() ?? "null"), false);
+        document.getElementById('ruleEditId').value = '0';
+        document.getElementById('lcRuleModalTitle').innerHTML = '<i class="bi bi-plus-circle me-2"></i>@(isAr ? "إضافة قاعدة" : "Add Lifecycle Rule")';
+        document.getElementById('ruleName').value = '';
+        document.getElementById('ruleTrigger').value = 'OnImport';
+        document.getElementById('rulePriority').value = '100';
+        document.getElementById('ruleField').value = 'STATUSE_CODE';
+        document.getElementById('ruleOp').value = '==';
+        document.getElementById('ruleValue').value = '';
+        document.getElementById('ruleAction').value = 'SetState';
+        document.getElementById('ruleActionValue').value = '';
+        document.getElementById('ruleGrace').value = '';
+        updateActionValueHint();
+    }
+
+    function setSelectValue(selectId, val) {
+        var sel = document.getElementById(selectId);
+        // Try exact match first
+        sel.value = val;
+        // If no match found (selectedIndex will be -1 or value won't match), try case-insensitive
+        if (sel.value !== val) {
+            for (var i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value.toLowerCase() === val.toLowerCase()) {
+                    sel.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        // If still no match, select first option as fallback
+        if (sel.selectedIndex === -1 || (sel.value !== val && sel.value.toLowerCase() !== val.toLowerCase())) {
+            console.warn('Dropdown "' + selectId + '": value "' + val + '" not found in options. Available:', Array.from(sel.options).map(o => o.value));
+            sel.selectedIndex = 0;
+        }
+    }
+
+    const isArLang = @(isAr ? "true" : "false");
+    function updateActionValueHint() {
+        var action = document.getElementById('ruleAction').value;
+        var label = document.getElementById('actionValueLabel');
+        var input = document.getElementById('ruleActionValue');
+        var hint = document.getElementById('actionValueHint');
+
+        switch (action) {
+            case 'SetState':
+                label.textContent = isArLang ? 'الحالة الجديدة' : 'New State';
+                input.placeholder = 'Suspended, Active, Deprovisioned...';
+                hint.textContent = isArLang ? 'الحالة التي سينتقل إليها الحساب' : 'The state the account will transition to';
+                break;
+            case 'MoveOU':
+                label.textContent = isArLang ? 'مسار الـ OU' : 'Target OU Path';
+                input.placeholder = 'OU=Disabled,{BaseDN}';
+                hint.textContent = isArLang ? 'يمكن استخدام {BaseDN} كمتغير' : 'Use {BaseDN} as a placeholder';
+                break;
+            case 'RemoveGroups':
+                label.textContent = isArLang ? 'أسماء القروبات' : 'Group Names';
+                input.placeholder = isArLang ? 'Group1, Group2, Group3' : 'Group1, Group2, Group3';
+                hint.textContent = isArLang ? 'أسماء القروبات مفصولة بفاصلة — اتركه فارغاً للإزالة من الكل' : 'Comma-separated group names — leave empty to remove from all';
+                break;
+            case 'AddGroups':
+                label.textContent = isArLang ? 'أسماء القروبات' : 'Group Names';
+                input.placeholder = isArLang ? 'Group1, Group2, Group3' : 'Group1, Group2, Group3';
+                hint.textContent = isArLang ? 'أسماء القروبات المراد إضافة الحساب إليها مفصولة بفاصلة' : 'Comma-separated group names to add the account to';
+                break;
+            case 'SendSMS':
+                label.textContent = isArLang ? 'قالب الرسالة' : 'Message Template';
+                input.placeholder = isArLang ? 'تم تعليق حسابك...' : 'Your account has been suspended...';
+                hint.textContent = '';
+                break;
+            case 'DisableAD':
+            case 'EnableAD':
+            case 'Deprovision':
+            case 'Reactivate':
+                label.textContent = isArLang ? 'قيمة الإجراء' : 'Action Value';
+                input.placeholder = isArLang ? 'اختياري' : 'Optional';
+                hint.textContent = '';
+                break;
+            default:
+                label.textContent = isArLang ? 'قيمة الإجراء' : 'Action Value';
+                input.placeholder = '';
+                hint.textContent = '';
+        }
+    }
+
+    function editRule(id, name, trigger, priority, field, op, value, action, actionValue, grace, tenantId) {
+        editingId = id;
+        setRuleTenant(tenantId, true);
+        document.getElementById('ruleEditId').value = id;
+        document.getElementById('lcRuleModalTitle').innerHTML = '<i class="bi bi-pencil me-2"></i>@(isAr ? "تعديل القاعدة" : "Edit Rule")';
+        document.getElementById('ruleName').value = name;
+        setSelectValue('ruleTrigger', trigger);
+        document.getElementById('rulePriority').value = priority;
+        document.getElementById('ruleField').value = field;
+        setSelectValue('ruleOp', op);
+        document.getElementById('ruleValue').value = value;
+        setSelectValue('ruleAction', action);
+        document.getElementById('ruleActionValue').value = actionValue;
+        document.getElementById('ruleGrace').value = grace;
+        updateActionValueHint();
+        new bootstrap.Modal(document.getElementById('ruleModal')).show();
+    }
+
+    async function saveRule() {
+        const id = parseInt(document.getElementById('ruleEditId').value) || 0;
+        const tenantSel = document.getElementById('ruleTenantId');
+        const rule = {
+            id: id,
+            // 0 lets the server fall back to the first active tenant (single-tenant installs).
+            tenantId: tenantSel ? (parseInt(tenantSel.value) || 0) : 0,
+            name: document.getElementById('ruleName').value,
+            triggerType: document.getElementById('ruleTrigger').value,
+            priority: parseInt(document.getElementById('rulePriority').value) || 100,
+            conditionField: document.getElementById('ruleField').value,
+            conditionOperator: document.getElementById('ruleOp').value,
+            conditionValue: document.getElementById('ruleValue').value,
+            actionType: document.getElementById('ruleAction').value,
+            actionValue: document.getElementById('ruleActionValue').value,
+            gracePeriodDays: parseInt(document.getElementById('ruleGrace').value) || null,
+            enabled: true
+        };
+
+        const url = id > 0 ? '@Url.Action("UpdateRule")' : '@Url.Action("CreateRule")';
+        const res = await fetch(url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rule)
+        });
+        if (res.ok) { location.reload(); } else { showToast('Failed to save rule', 'error'); }
+    }
+
+    async function deleteRule(id) {
+        if (!confirm(isRtl ? 'هل تريد حذف هذه القاعدة؟' : 'Delete this rule?')) return;
+        const res = await fetch('@Url.Action("DeleteRule")?id=' + id, { method: 'POST' });
+        if (res.ok) location.reload();
+    }
+
+    async function toggleRule(id) {
+        await fetch('@Url.Action("ToggleRule")?id=' + id, { method: 'POST' });
+    }
+
+    function updateLcPhase(currentStage, stageLabel) {
+        const phaseIcons = { 1: 'bi-database', 2: 'bi-gear-wide-connected', 3: 'bi-cloud-upload' };
+
+        for (let i = 1; i <= 3; i++) {
+            const step = document.getElementById(`lcPhase${i}`);
+            const iconEl = document.getElementById(`lcPhaseIcon${i}`);
+            if (!step) continue;
+
+            step.classList.remove('active', 'completed');
+            if (i < currentStage) {
+                step.classList.add('completed');
+                iconEl.className = 'bi bi-check-lg';
+            } else if (i === currentStage) {
+                step.classList.add('active');
+                iconEl.className = `bi ${phaseIcons[i]}`;
+            } else {
+                iconEl.className = `bi ${phaseIcons[i]}`;
+            }
+        }
+
+        // Update connectors
+        for (let i = 1; i <= 2; i++) {
+            const conn = document.getElementById(`lcConn${i}`);
+            const connFill = document.getElementById(`lcConnFill${i}`);
+            if (!conn || !connFill) continue;
+
+            conn.classList.remove('completed', 'in-progress');
+            if (i < currentStage) {
+                conn.classList.add('completed');
+                connFill.style.width = '100%';
+            } else if (i === currentStage) {
+                conn.classList.add('in-progress');
+                connFill.style.width = '50%';
+            } else {
+                connFill.style.width = '0%';
+            }
+        }
+
+        // Update description badge
+        const descText = document.getElementById('lcPhaseDescText');
+        const descIcon = document.getElementById('lcPhaseDescIcon');
+        const descBadge = document.getElementById('lcPhaseDescBadge');
+        if (stageLabel) {
+            descText.textContent = stageLabel;
+            const isComplete = stageLabel.includes('اكتملت') || stageLabel.includes('Completed');
+            descBadge.classList.toggle('completed', isComplete);
+            descIcon.className = isComplete ? 'bi bi-check-circle-fill' : 'bi bi-gear-fill';
+        }
+    }
+
+    async function processAllPending() {
+        const btn = document.getElementById('btnProcessAll');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> @(isAr ? "جارٍ المعالجة..." : "Processing...")';
+
+        const progressDiv = document.getElementById('lifecycleProgress');
+        const progressBar = document.getElementById('lcProgressBar');
+        const progressText = document.getElementById('lcProgressText');
+        const progressPct = document.getElementById('lcProgressPct');
+        const progressStage = document.getElementById('lcProgressStage');
+        progressDiv.classList.remove('d-none');
+        progressBar.style.width = '0%';
+        progressBar.classList.add('active');
+        progressPct.textContent = '0%';
+        progressText.textContent = isRtl ? 'جارٍ التحميل...' : 'Queuing job...';
+
+        // Reset phase stepper
+        updateLcPhase(0, isRtl ? 'جاري التهيئة...' : 'Initializing...');
+
+        try {
+            // Process only the selected tenant; no selection = every active tenant.
+            const res = await fetch('@Url.Action("ProcessAll")' + lcTenantQuery('?'), { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.error || 'Failed', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> @(isAr ? "معالجة الكل" : "Process All")';
+                progressDiv.classList.add('d-none');
+                return;
+            }
+
+            let lastKnownStage = 0;
+            const poll = setInterval(async () => {
+                try {
+                    const [prRes, statsRes] = await Promise.all([
+                        fetch('@Url.Action("GetProgress")'),
+                        fetch('@Url.Action("Stats")' + lcTenantQuery('?'))
+                    ]);
+                    const pg = await prRes.json();
+                    const st = await statsRes.json();
+
+                    // Update phase stepper
+                    if (pg.currentStage > 0) {
+                        updateLcPhase(pg.currentStage, pg.stageLabel);
+                    }
+
+                    // Reset progress bar when advancing to a new stage
+                    if (pg.currentStage > lastKnownStage) {
+                        lastKnownStage = pg.currentStage;
+                        progressBar.style.width = '0%';
+                        progressPct.textContent = '0%';
+                    }
+
+                    // Update progress bar with per-stage percentage
+                    if (pg.total > 0) {
+                        const pct = Math.min(100, Math.round(pg.processed / pg.total * 100));
+                        progressBar.style.width = pct + '%';
+                        progressPct.textContent = pct + '%';
+
+                        const stageNames = { 'Import': isRtl ? 'الاستيراد' : 'Import', 'Rules': isRtl ? 'القواعد' : 'Rules', 'Export': isRtl ? 'التصدير' : 'Export' };
+                        const stageName = stageNames[pg.stage] || pg.stageLabel || pg.stage || '';
+                        progressStage.textContent = stageName;
+                        progressText.textContent = pg.processed.toLocaleString() + ' / ' + pg.total.toLocaleString();
+                    } else if (pg.total === -1) {
+                        // Initializing — show indeterminate
+                        progressBar.style.width = '10%';
+                        progressPct.textContent = '—';
+                        progressStage.textContent = pg.stageLabel || (isRtl ? 'جاري التهيئة...' : 'Initializing...');
+                    }
+
+                    // Update stats cards
+                    if (st.totalIdentities !== undefined) {
+                        document.getElementById('statTotal').textContent = st.totalIdentities;
+                        document.getElementById('statPending').textContent = st.pendingCount;
+                        document.getElementById('statActive').textContent = st.activeCount;
+                        document.getElementById('statSuspended').textContent = st.suspendedCount;
+                        document.getElementById('statDeprovisioned').textContent = st.deprovisionedCount;
+                    }
+
+                    if (!pg.isRunning) {
+                        clearInterval(poll);
+                        progressBar.classList.remove('active');
+                        progressBar.style.width = '100%';
+                        progressPct.textContent = '100%';
+                        updateLcPhase(3, isRtl ? 'اكتملت المعالجة' : 'Processing Complete');
+                        progressText.textContent = isRtl
+                            ? 'اكتملت: ' + (pg.processed || 0).toLocaleString() + ' هوية'
+                            : 'Completed: ' + (pg.processed || 0).toLocaleString() + ' identities';
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> @(isAr ? "معالجة الكل" : "Process All")';
+                        showToast(isRtl ? 'تمت المعالجة بنجاح' : 'Processing completed', 'success');
+                        setTimeout(() => location.reload(), 2000);
+                    }
+
+                    if (pg.error) {
+                        clearInterval(poll);
+                        progressBar.style.width = '100%';
+                        progressBar.classList.remove('active');
+                        progressBar.style.background = 'var(--danger)';
+                        progressPct.textContent = isRtl ? 'فشل' : 'Failed';
+                        progressText.textContent = isRtl
+                            ? 'فشل: ' + pg.error
+                            : 'Failed: ' + pg.error;
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> @(isAr ? "معالجة الكل" : "Process All")';
+                        showToast(isRtl ? 'فشلت المعالجة' : 'Processing failed', 'error');
+                    }
+                } catch (e) { /* ignore polling errors */ }
+            }, 2000);
+        } catch (e) {
+            showToast('Request failed', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> @(isAr ? "معالجة الكل" : "Process All")';
+            progressDiv.classList.add('d-none');
+        }
+    }
+</script>
+}

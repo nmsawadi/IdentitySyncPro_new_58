@@ -1,0 +1,46 @@
+@{
+    Layout = "_PortalLayout";
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "دخول بوابة الوصول" : "Access Portal Sign-in";
+}
+
+<div class="portal-narrow">
+    <div class="portal-card">
+        <h5 class="fw-bold mb-1">@(isAr ? "سجّل الدخول بحسابك" : "Sign in with your account")</h5>
+        <p class="muted fs-xs mb-4">
+            @(isAr
+                ? "استخدم اسم الدخول وكلمة المرور نفسيهما اللذين تستخدمهما على أجهزة العمل."
+                : "Use the same username and password you use on your work computer.")
+        </p>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="alert alert-danger py-2 fs-xs">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>@ViewBag.Error
+            </div>
+        }
+
+        <form method="post" action="@Url.Action("Login", "Portal")">
+            @Html.AntiForgeryToken()
+            <div class="mb-3">
+                <label class="form-label">@(isAr ? "اسم الدخول" : "Username")</label>
+                <input type="text" name="username" class="form-control" dir="ltr" autocomplete="username" required autofocus />
+            </div>
+            <div class="mb-4">
+                <label class="form-label">@(isAr ? "كلمة المرور" : "Password")</label>
+                <input type="password" name="password" class="form-control" dir="ltr" autocomplete="current-password" required />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-box-arrow-in-@(isAr ? "left" : "right") me-1"></i>@(isAr ? "دخول" : "Sign in")
+            </button>
+        </form>
+
+        <p class="muted fs-xs mt-4 mb-0">
+            @* Stated because it is what makes the page safe to expose, and what stops somebody
+               expecting to administer anything from here. *@
+            @(isAr
+                ? "هذه البوابة لطلب الوصول لحسابك أنت فقط. لا تمنح أي صلاحية إدارية على النظام، ولا تصل منها إلى شاشات الإدارة."
+                : "This portal is only for requesting access for your own account. It grants no administrative rights and reaches no management screen.")
+        </p>
+    </div>
+</div>

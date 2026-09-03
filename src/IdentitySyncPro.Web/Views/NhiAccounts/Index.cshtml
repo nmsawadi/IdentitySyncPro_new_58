@@ -1,0 +1,239 @@
+@using IdentitySyncPro.Core.Models.Governance
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "الحسابات غير البشرية" : "Non-Human Accounts";
+
+    var accounts = ViewBag.Accounts as List<GovNhiAccount> ?? new();
+    var counts = ViewBag.Counts as Dictionary<string, int> ?? new();
+    var now = (DateTime)(ViewBag.Now ?? DateTime.UtcNow);
+    var state = ViewBag.State as string;
+    var query = ViewBag.Query as string;
+
+    int Count(string s) => counts.TryGetValue(s, out var n) ? n : 0;
+    var live = Count(GovNhiStates.Discovered) + Count(GovNhiStates.Claimed)
+             + Count(GovNhiStates.Quarantined) + Count(GovNhiStates.Exempt);
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h5 class="fw-700 mb-1">
+            <i class="bi bi-robot me-2 text-accent"></i>@(isAr ? "الحسابات غير البشرية" : "Non-Human Accounts")
+        </h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr
+                ? "المجتمع الذي يتعقّبه الجرد — حالته ومالكوه وما حدث لكل حساب"
+                : "The population the inventory tracks — its states, its owners, and what happened to each account")
+        </p>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (live == 0)
+{
+    @* Zero here is not the same news as zero on the other reports, and saying so is the point:
+       nothing tracked usually means no service has the lifecycle switched on. *@
+    <div class="alert alert-info glass-card border-0">
+        <i class="bi bi-info-circle-fill me-2"></i>
+        @(isAr
+            ? "لا يوجد حساب متعقَّب. هذا لا يعني أن الدومين نظيف — الأرجح أن لا خدمة جرد مفعّل عليها خيار «دورة الحياة». راجع إعدادات خدمة الجرد."
+            : "Nothing is tracked. That does not mean the domain is clean — more likely no inventory service has the lifecycle switched on. Check the inventory service settings.")
+    </div>
+}
+
+<div class="row g-2 mb-3">
+    @foreach (var (key, label, icon, css) in new[]
+    {
+        (GovNhiStates.Quarantined, isAr ? "محجور" : "Quarantined",  "bi-shield-exclamation", "text-danger"),
+        (GovNhiStates.Discovered,  isAr ? "بلا مالك" : "Unowned",   "bi-question-circle",    "text-warning"),
+        (GovNhiStates.Claimed,     isAr ? "له مالك" : "Owned",      "bi-person-check",       "text-success"),
+        (GovNhiStates.Exempt,      isAr ? "مستثنى" : "Exempt",      "bi-shield-slash",       "text-info"),
+        (GovNhiStates.Retired,     isAr ? "غادر الدليل" : "Gone",   "bi-archive",            "text-muted")
+    })
+    {
+        <div class="col-6 col-md">
+            <a href="@Url.Action("Index", new { state = key })"
+               class="glass-card d-block text-center py-3 text-decoration-none @(state == key ? "border-accent" : "")">
+                <i class="bi @icon @css d-block mb-1"></i>
+                <div class="fw-700 fs-4 @css">@Count(key)</div>
+                <div class="fs-sm text-muted">@label</div>
+            </a>
+        </div>
+    }
+</div>
+
+<form method="get" class="glass-card mb-3 d-flex gap-2 flex-wrap align-items-end">
+    <input type="hidden" name="state" value="@state" />
+    <div class="flex-grow-1">
+        <label class="form-label fs-sm">@(isAr ? "بحث" : "Search")</label>
+        <input type="text" name="q" value="@query" class="form-control"
+               placeholder="@(isAr ? "اسم الحساب أو المالك" : "account name or owner")" />
+    </div>
+    <button type="submit" class="btn btn-accent"><i class="bi bi-search me-1"></i>@(isAr ? "ابحث" : "Search")</button>
+    @if (!string.IsNullOrWhiteSpace(state) || !string.IsNullOrWhiteSpace(query))
+    {
+        <a href="@Url.Action("Index")" class="btn btn-glass">@(isAr ? "الكل" : "All")</a>
+    }
+</form>
+
+@if (accounts.Count == 0)
+{
+    <div class="glass-card text-center py-4 text-muted">
+        @(isAr ? "لا نتائج لهذا الفلتر." : "No results for this filter.")
+    </div>
+}
+else
+{
+    <div class="glass-card p-0 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>@(isAr ? "الحساب" : "Account")</th>
+                        <th>@(isAr ? "الحالة" : "State")</th>
+                        <th>@(isAr ? "المالك" : "Owner")</th>
+                        <th>@(isAr ? "التفاصيل" : "Detail")</th>
+                        <th class="text-end">@(isAr ? "الإجراء" : "Action")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var a in accounts)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-600">@a.Account</div>
+                            <div class="fs-sm text-muted text-truncate" style="max-width: 320px;" title="@a.DistinguishedName">
+                                @a.DistinguishedName
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(a.Signals))
+                            {
+                                <div class="fs-sm text-muted"><i class="bi bi-tag me-1"></i>@a.Signals</div>
+                            }
+                        </td>
+                        <td><partial name="_NhiState" model="a" /></td>
+                        <td class="fs-sm">
+                            @if (!string.IsNullOrWhiteSpace(a.OwnerUsername))
+                            {
+                                <div class="fw-600">@a.OwnerUsername</div>
+                                @if (a.LastAttestedUtc is { } last)
+                                {
+                                    <div class="text-muted">@(isAr ? "أقرّ في" : "attested") @last.ToString("yyyy-MM-dd")</div>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">@(isAr ? "بلا مالك" : "none")</span>
+                                @if (!string.IsNullOrWhiteSpace(a.DisownedBy))
+                                {
+                                    <div class="text-warning">@(isAr ? "أعاده" : "declined by") @a.DisownedBy</div>
+                                }
+                            }
+                        </td>
+                        <td class="fs-sm">
+                            @if (a.State == GovNhiStates.Quarantined && !string.IsNullOrWhiteSpace(a.QuarantineReason))
+                            {
+                                <div class="text-danger">@a.QuarantineReason</div>
+                                @if (!string.IsNullOrWhiteSpace(a.QuarantineError))
+                                {
+                                    <div class="text-muted">@a.QuarantineError</div>
+                                }
+                            }
+                            else if (a.State == GovNhiStates.Exempt)
+                            {
+                                <div>@a.ExemptReason</div>
+                                <div class="text-muted">
+                                    @(isAr ? "حتى" : "until") @a.ExemptUntilUtc?.ToString("yyyy-MM-dd")
+                                    @if (!string.IsNullOrWhiteSpace(a.ExemptBy)) { <text> · @a.ExemptBy</text> }
+                                </div>
+                            }
+                            else if (a.State == GovNhiStates.Retired)
+                            {
+                                <div class="text-muted">@(isAr ? "غاب في" : "gone since") @a.RetiredUtc?.ToString("yyyy-MM-dd")</div>
+                            }
+                            else if (a.ClaimDueUtc is { } due)
+                            {
+                                <div class="text-muted">@(isAr ? "مهلة المطالبة" : "claim deadline") @due.ToString("yyyy-MM-dd")</div>
+                            }
+                            <div class="text-muted">@(isAr ? "رُئي أول مرة" : "first seen") @a.FirstSeenUtc.ToString("yyyy-MM-dd")</div>
+                        </td>
+                        <td class="text-end">
+                            @if (a.State == GovNhiStates.Exempt)
+                            {
+                                <form method="post" action="@Url.Action("EndExemption")" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@a.Id" />
+                                    <input type="hidden" name="state" value="@state" />
+                                    <button type="submit" class="btn btn-sm btn-glass">
+                                        <i class="bi bi-shield-check me-1"></i>@(isAr ? "أنهِ الاستثناء" : "End exemption")
+                                    </button>
+                                </form>
+                            }
+                            else if (a.State != GovNhiStates.Retired)
+                            {
+                                <button type="button" class="btn btn-sm btn-glass"
+                                        data-bs-toggle="modal" data-bs-target="#exempt-@a.Id">
+                                    <i class="bi bi-shield-slash me-1"></i>@(isAr ? "استثنِ" : "Exempt")
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @foreach (var a in accounts.Where(x => x.State != GovNhiStates.Exempt && x.State != GovNhiStates.Retired))
+    {
+        <div class="modal fade" id="exempt-@a.Id" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <form method="post" action="@Url.Action("Exempt")" class="modal-content glass-card">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@a.Id" />
+                    <input type="hidden" name="state" value="@state" />
+                    <div class="modal-header border-0">
+                        <h6 class="modal-title fw-700">
+                            <i class="bi bi-shield-slash me-2 text-accent"></i>@(isAr ? "استثناء" : "Exempt") — @a.Account
+                        </h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="fs-sm text-muted">
+                            @(isAr
+                                ? "يخرج الحساب من دورة الحياة حتى التاريخ المحدّد، ثم يعود ويُطرح السؤال من جديد. الاستثناء بلا نهاية ثقبٌ لا يُغلقه أحد، فالتاريخ إلزامي."
+                                : "The account leaves the lifecycle until the stated date, then returns and the question is asked again. An exemption with no end is a gap nobody closes, so the date is required.")
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label fs-sm">@(isAr ? "السبب" : "Reason") <span class="text-danger">*</span></label>
+                            <input type="text" name="reason" class="form-control" required
+                                   placeholder="@(isAr ? "مثلاً: حساب break-glass للطوارئ" : "e.g. emergency break-glass account")" />
+                        </div>
+                        <div>
+                            <label class="form-label fs-sm">@(isAr ? "حتى تاريخ" : "Until") <span class="text-danger">*</span></label>
+                            <input type="date" name="untilUtc" class="form-control" required
+                                   min="@DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd")"
+                                   max="@DateTime.UtcNow.AddDays(365).ToString("yyyy-MM-dd")" />
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-glass" data-bs-dismiss="modal">@(isAr ? "إلغاء" : "Cancel")</button>
+                        <button type="submit" class="btn btn-accent">@(isAr ? "استثنِ" : "Exempt")</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+}

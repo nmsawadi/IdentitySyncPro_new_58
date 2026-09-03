@@ -1,0 +1,65 @@
+@{
+    Layout = "_AuthLayout";
+    var isAr = (ViewBag.Lang as string ?? "ar") != "en";
+    ViewData["Title"] = isAr ? "تفعيل التحقق بخطوتين" : "Set up two-factor";
+    var error = ViewBag.Error as string;
+}
+
+<h6 class="fw-bold text-center mb-1">@(isAr ? "تفعيل التحقق بخطوتين" : "Set up two-factor authentication")</h6>
+<p class="text-center text-muted fs-sm mb-3">
+    @(isAr
+        ? "حسابك يحمل صلاحيات إدارية، ويتطلّب عاملاً ثانياً"
+        : "Your account is privileged and requires a second factor")
+    <br />
+    <span class="badge bg-secondary mt-2">@ViewBag.Username</span>
+</p>
+
+@if (error != null)
+{
+    <div class="alert alert-danger py-2 fs-sm">
+        <i class="bi bi-x-circle me-1"></i>
+        @(isAr ? "الرمز غير صحيح — تأكد من إضافة الحساب في التطبيق ثم أدخل الرمز الحالي."
+                : "Incorrect code — make sure the account was added, then enter the current code.")
+    </div>
+}
+
+<ol class="fs-sm text-muted ps-3 mb-3">
+    <li>@(isAr ? "افتح تطبيق مصادقة (Microsoft Authenticator أو Google Authenticator)." : "Open an authenticator app (Microsoft or Google Authenticator).")</li>
+    <li>@(isAr ? "امسح الرمز أدناه، أو أدخل المفتاح يدوياً." : "Scan the code below, or enter the key manually.")</li>
+    <li>@(isAr ? "أدخل الرمز المكوّن من ٦ أرقام لتأكيد الإعداد." : "Enter the 6-digit code to confirm.")</li>
+</ol>
+
+<div class="text-center mb-3">
+    @* Rendered server-side as inline SVG: no image host is contacted, so the secret never
+       leaves this server and the page works with no internet access. *@
+    <div class="qr-plate">@Html.Raw(ViewBag.QrSvg)</div>
+</div>
+
+<p class="fs-sm text-muted mb-1">@(isAr ? "أو أدخل هذا المفتاح يدوياً:" : "Or enter this key manually:")</p>
+<div class="secret-box mb-3">@ViewBag.Secret</div>
+
+<form method="post" action="@Url.Action("MfaSetup", "Account")" autocomplete="off">
+    @Html.AntiForgeryToken()
+    <div class="mb-3">
+        <label class="form-label fs-sm text-muted">@(isAr ? "الرمز من التطبيق" : "Code from the app")</label>
+        <input type="text" name="code" class="form-control code-input" maxlength="7"
+               inputmode="numeric" autocomplete="one-time-code" autofocus required placeholder="000000" />
+    </div>
+    <button type="submit" class="btn btn-primary btn-auth w-100">
+        <i class="bi bi-shield-check me-1"></i> @(isAr ? "تأكيد التفعيل" : "Confirm and enable")
+    </button>
+</form>
+
+<div class="alert alert-warning py-2 px-3 mt-3 mb-0 fs-sm">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    @(isAr
+        ? "لن يُفعَّل شيء قبل أن تُدخل رمزاً صحيحاً — فلا يمكن أن تُحبس خارج النظام بإعداد خاطئ."
+        : "Nothing is enabled until a correct code is entered — a mis-scan cannot lock you out.")
+</div>
+
+<form method="post" action="@Url.Action("Logout", "Account")" class="text-center mt-3">
+    @Html.AntiForgeryToken()
+    <button type="submit" class="btn btn-link btn-sm text-muted text-decoration-none">
+        <i class="bi bi-box-arrow-left me-1"></i> @(isAr ? "إلغاء وتسجيل الخروج" : "Cancel and sign out")
+    </button>
+</form>

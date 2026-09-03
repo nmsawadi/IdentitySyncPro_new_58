@@ -1,0 +1,82 @@
+@{
+    // Standalone shell for the half-authenticated MFA screens.
+    //
+    // Deliberately NOT _Layout: a user who has proven only a password must not be shown the
+    // application chrome — the sidebar alone would disclose which modules exist and which roles
+    // the account holds. Visually matched to the sign-in page so the flow reads as one step.
+    Layout = null;
+    var lang = (ViewBag.Lang as string) == "en" ? "en" : "ar";
+    var isAr = lang == "ar";
+}
+<!DOCTYPE html>
+<html lang="@lang" dir="@(isAr ? "rtl" : "ltr")" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - IdentitySync Pro</title>
+    <link href="~/lib/fonts/fonts.css" rel="stylesheet" />
+    <link href="@Url.Content(isAr ? "~/lib/bootstrap-5.3.3/css/bootstrap.rtl.min.css" : "~/lib/bootstrap-5.3.3/css/bootstrap.min.css")" rel="stylesheet" />
+    <link href="~/lib/bootstrap-icons-1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(ellipse at top, #1e1b4b 0%, #0f0f23 55%, #09090f 100%);
+            padding: 24px 12px;
+        }
+        .auth-card {
+            width: 100%; max-width: 460px;
+            padding: 36px 32px; border-radius: 20px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(18px);
+            box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+        }
+        .brand-icon {
+            width: 56px; height: 56px; border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            font-size: 26px; color: #fff; margin: 0 auto 14px;
+        }
+        .form-control {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 12px 14px;
+        }
+        .form-control:focus { background: rgba(255,255,255,0.07); border-color: #6366f1; box-shadow: none; }
+        .btn-auth { background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; padding: 12px; font-weight: 700; }
+        .btn-auth:hover { filter: brightness(1.1); }
+        .code-input {
+            letter-spacing: 0.5em; text-align: center;
+            font-size: 1.6rem; font-weight: 700;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .secret-box {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            background: rgba(0,0,0,0.35); border: 1px dashed rgba(255,255,255,0.2);
+            border-radius: 10px; padding: 12px; text-align: center;
+            font-size: 1.02rem; letter-spacing: 0.12em; word-break: break-all;
+        }
+        /* The QR is generated as a black-on-white SVG; keep a white plate so it stays scannable
+           against this dark background. */
+        .qr-plate { background: #fff; padding: 10px; border-radius: 12px; display: inline-block; line-height: 0; }
+        .qr-plate svg { width: 190px; height: 190px; display: block; }
+        .recovery-code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px; padding: 8px 6px; text-align: center;
+            letter-spacing: 0.08em; font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <div class="text-center mb-3">
+            <div class="brand-icon"><i class="bi bi-shield-lock-fill"></i></div>
+            <h5 class="fw-bold mb-0">IdentitySync Pro</h5>
+        </div>
+        @RenderBody()
+    </div>
+</body>
+</html>

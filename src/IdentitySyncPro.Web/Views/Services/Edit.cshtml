@@ -1,0 +1,1376 @@
+﻿@model IdentitySyncPro.Core.Models.Services.SvcService
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? $"تعديل: {Model.Name}" : $"Edit: {Model.Name}";
+}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="@Url.Action("Index")" class="btn btn-glass btn-sm">
+        <i class="bi bi-arrow-@(isAr ? "right" : "left")"></i>
+    </a>
+    <div>
+        <h5 class="fw-700 mb-0">
+            <i class="bi bi-pencil-fill me-2 text-accent"></i>
+            @(isAr ? "تعديل الخدمة" : "Edit Service"): @Model.Name
+        </h5>
+        <p class="text-muted fs-sm mb-0">ID: @Model.Id | @(isAr ? "آخر تحديث" : "Last updated"): @Model.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</p>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@* This screen had nowhere to show a refusal, so a save rejected for a bad schedule would have
+   redirected back looking exactly like one that succeeded — nothing saved, nothing said. *@
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- Tab Navigation -->
+<ul class="nav nav-pills glass-tabs mb-4" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabConfig">
+            <i class="bi bi-sliders2 me-1"></i> @(isAr ? "الإعدادات" : "Configuration")
+        </button>
+    </li>
+    @if (Model.ServiceType == "Sync")
+    {
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMapping">
+            <i class="bi bi-arrow-left-right me-1"></i> @(isAr ? "ربط الأعمدة" : "Field Mapping")
+            <span class="badge bg-accent ms-1">@Model.FieldMappings.Count</span>
+        </button>
+    </li>
+    }
+</ul>
+
+<div class="tab-content">
+    <!-- Tab: Configuration -->
+    <div class="tab-pane fade show active" id="tabConfig">
+        <form asp-action="Edit" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.Id" />
+
+            <!-- Service Info -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-info-circle-fill me-2 text-accent"></i> @(isAr ? "معلومات الخدمة" : "Service Info")</h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "اسم الخدمة" : "Service Name") <span class="text-danger">*</span></label>
+                        <input type="text" name="Name" class="form-control bg-transparent" value="@Model.Name" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "نوع الخدمة" : "Service Type")</label>
+                        <input type="hidden" name="ServiceType" value="@Model.ServiceType" />
+                        <div class="form-control bg-transparent" style="pointer-events:none">
+                            <span class="badge @(Model.ServiceType == "Offboarding" ? "bg-danger bg-opacity-25 text-danger" : Model.ServiceType == "EmptyAttrDisable" ? "bg-warning bg-opacity-25 text-warning" : Model.ServiceType == "InactiveDisable" ? "bg-danger bg-opacity-25 text-danger" : "bg-info bg-opacity-25 text-info")">
+                                @(Model.ServiceType == "Offboarding" ? (isAr ? "🚫 إخلاء طرف" : "🚫 Offboarding")
+                                    : Model.ServiceType == "EmptyAttrDisable" ? (isAr ? "⛔ تعطيل ناقصي البيانات" : "⛔ Empty-Attr Disable")
+                                    : Model.ServiceType == "InactiveDisable" ? (isAr ? "🕒 تعطيل غير المستخدمة" : "🕒 Inactive Disable")
+                                    : Model.ServiceType == "AdAudit" ? (isAr ? "🛡️ تدقيق / تقارير AD" : "🛡️ AD Audit")
+                                    : Model.ServiceType == "ExpiryDisable" ? (isAr ? "📅 تنبيه الانتهاء" : "📅 Expiry")
+                                    : Model.ServiceType == "OrphanCleanup" ? (isAr ? "👻 الحسابات اليتيمة" : "👻 Orphaned")
+                                    : (isAr ? "🔄 مزامنة" : "🔄 Sync"))
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">@(isAr ? "الحالة" : "Status")</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="IsEnabled" value="true" @(Model.IsEnabled ? "checked" : "") id="chkEnabled">
+                            <input type="hidden" name="IsEnabled" value="false" />
+                            <label class="form-check-label" for="chkEnabled">@(isAr ? "مفعّلة" : "Enabled")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" class="btn btn-success w-100" id="btnRunNow">
+                            <i class="bi bi-play-fill me-1"></i> @(isAr ? "تشغيل الآن" : "Run Now")
+                        </button>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "الوصف" : "Description")</label>
+                        <textarea name="Description" class="form-control bg-transparent" rows="2">@Model.Description</textarea>
+                    </div>
+                </div>
+            </div>
+
+            @if (Model.ServiceType == "Offboarding")
+            {
+            <!-- Offboarding Settings -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-person-x-fill me-2 text-danger"></i> @(isAr ? "إعدادات إخلاء الطرف" : "Offboarding Settings")</h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "عمود الحالة" : "Status Column") <span class="text-danger">*</span></label>
+                        <input type="text" name="StatusColumn" class="form-control bg-transparent" value="@Model.StatusColumn"
+                               placeholder="@(isAr ? "مثال: STATUS" : "e.g., STATUS")" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "قيمة غير الفعّال" : "Inactive Value") <span class="text-danger">*</span></label>
+                        <input type="text" name="StatusValue" class="form-control bg-transparent" value="@Model.StatusValue"
+                               placeholder="@(isAr ? "مثال: Inactive" : "e.g., Inactive")" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "أعمدة اسم الموظف" : "Employee Name Columns")</label>
+                        <input type="text" name="EmployeeNameColumn" class="form-control bg-transparent" value="@Model.EmployeeNameColumn"
+                               placeholder="FirstName,SecondName,ThirdName,FamilyName" />
+                        <div class="form-text">@(isAr ? "يمكن كتابة عدة أعمدة مفصولة بفاصلة لتكوين الاسم الكامل" : "Comma-separated columns to form full name")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدف للنقل" : "Target OU for Move") <span class="text-danger">*</span></label>
+                        <input type="text" name="TargetOU" class="form-control bg-transparent" value="@Model.TargetOU"
+                               placeholder="@(isAr ? "مثال: OU=EndedContracts,DC=company,DC=com" : "e.g., OU=EndedContracts,DC=company,DC=com")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "OU البحث عن المستخدمين" : "Search OU (Offboarding)")</label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent" value="@Model.OffboardingSearchOU"
+                               placeholder="@(isAr ? "مثال: OU=Employees,DC=company,DC=com" : "e.g., OU=Employees,DC=company,DC=com")" />
+                        <div class="form-text">@(isAr ? "الـ OU المحددة للبحث عن المستخدمين. اتركه فارغاً للبحث في Base DN بالكامل" : "Specific OU to search for users. Leave empty to search entire Base DN")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "مجموعة الاستثناء (لا يُخلى طرف أعضائها)" : "Exclusion Group (members are exempt)")</label>
+                        <input type="text" name="OffboardingExclusionGroup" class="form-control bg-transparent" value="@Model.OffboardingExclusionGroup"
+                               placeholder="@(isAr ? "مثال: OffboardingExempt — اسم المجموعة أو DN كامل" : "e.g., OffboardingExempt — group name or full DN")" />
+                        <div class="form-text">@(isAr ? "أي مستخدم عضو في هذه المجموعة (ولو عبر مجموعات متداخلة) لن يُطبَّق عليه إخلاء الطرف. اتركه فارغاً لتعطيل الاستثناء" : "Any member of this group (including nested groups) is exempt from offboarding. Leave empty to disable")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-chat-dots-fill me-2 text-success"></i> @(isAr ? "إشعار SMS" : "SMS Notification")</h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableSms" value="true" @(Model.EnableSms ? "checked" : "") id="chkSmsEdit">
+                            <input type="hidden" name="EnableSms" value="false" />
+                            <label class="form-check-label" for="chkSmsEdit">@(isAr ? "تفعيل SMS" : "Enable SMS")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4" id="phoneColGroupEdit" style="display:none">
+                        <label class="form-label">@(isAr ? "خاصية AD لرقم الجوال" : "AD Phone Attribute")</label>
+                        <input type="text" name="PhoneColumn" class="form-control bg-transparent" value="@Model.PhoneColumn"
+                               placeholder="extensionAttribute13" />
+                        <div class="form-text">@(isAr ? "خاصية Active Directory التي تحتوي رقم الجوال" : "AD attribute that stores the mobile number")</div>
+                    </div>
+                    <div class="col-md-4" id="smsProviderGroupEdit" style="display:none">
+                        <label class="form-label">@(isAr ? "مزود SMS" : "SMS Provider")</label>
+                        <select name="SmsProviderId" class="form-select bg-transparent" id="smsProviderSelect">
+                            <option value="">@(isAr ? "-- اختر مزوداً --" : "-- Select provider --")</option>
+                        </select>
+                        <div class="form-text">
+                            @(isAr ? "أضف مزودين من" : "Add providers from ")
+                            <a href="@Url.Action("Index", "SmsCenter")" target="_blank">@(isAr ? "مركز الإشعارات" : "Notifications Center")</a>
+                        </div>
+                    </div>
+                    <div class="col-12" id="smsTemplateGroupEdit" style="display:none">
+                        <label class="form-label">@(isAr ? "قالب الرسالة" : "SMS Template")</label>
+                        <textarea name="SmsTemplate" class="form-control bg-transparent" rows="2"
+                                  placeholder="@(isAr ? "عزيزي {EMPLOYEE_NAME}، تم إخلاء طرفك برقم {EMPLOYEE_ID}" : "Dear {EMPLOYEE_NAME}, your account has been offboarded")">@Model.SmsTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {EMPLOYEE_NAME}, {EMPLOYEE_ID}, {SAM_ACCOUNT}" : "Variables: {EMPLOYEE_NAME}, {EMPLOYEE_ID}, {SAM_ACCOUNT}")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i> @(isAr ? "إشعار البريد الإلكتروني (للإدارة)" : "Email Notification (Admin)")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" @(Model.EnableEmailNotification ? "checked" : "") id="chkEmailEdit">
+                            <input type="hidden" name="EnableEmailNotification" value="false" />
+                            <label class="form-check-label" for="chkEmailEdit">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" value="@Model.NotificationEmail"
+                               placeholder="admin@company.com; hr@company.com" />
+                        <div class="form-text">@(isAr ? "يدعم عدة عناوين مفصولة بـ ;" : "Multiple addresses separated by ;")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent" value="@Model.EmailSubject"
+                               placeholder="@(isAr ? "إخلاء طرف: {EMPLOYEE_NAME} - {EMPLOYEE_ID}" : "Offboarding: {EMPLOYEE_NAME} - {EMPLOYEE_ID}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="4"
+                                  placeholder="@(isAr ? "اتركه فارغاً لاستخدام القالب الافتراضي" : "Leave empty to use default template")">@Model.EmailBodyTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {EMPLOYEE_NAME}, {EMPLOYEE_ID}, {SAM_ACCOUNT}, {DEPARTMENT}, {JOB_TITLE}" : "Variables: {EMPLOYEE_NAME}, {EMPLOYEE_ID}, {SAM_ACCOUNT}, {DEPARTMENT}, {JOB_TITLE}")</div>
+                    </div>
+                </div>
+            </div>
+            }
+
+            @if (Model.ServiceType == "EmptyAttrDisable")
+            {
+            <!-- Empty-Attribute Disable Settings -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-person-fill-slash me-2 text-warning"></i> @(isAr ? "إعدادات تعطيل ناقصي البيانات" : "Empty-Attribute Disable Settings")</h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "السمات المطلوب فحصها" : "Attributes to Check") <span class="text-danger">*</span></label>
+                        <input type="text" name="EmptyCheckAttributes" class="form-control bg-transparent" value="@Model.EmptyCheckAttributes"
+                               placeholder="extensionAttribute2, mobile, department" />
+                        <div class="form-text">@(isAr ? "سمات AD مفصولة بفاصلة — أي حساب مفعّل تكون إحدى هذه السمات فارغة فيه سيُعطَّل في مكانه (بدون نقل)" : "Comma-separated AD attributes — any enabled account with one of them empty gets disabled in place (no move)")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة للفحص" : "OU to Scan")</label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent" value="@Model.OffboardingSearchOU"
+                               placeholder="@(isAr ? "مثال: OU=Employees,DC=company,DC=com" : "e.g., OU=Employees,DC=company,DC=com")" />
+                        <div class="form-text">@(isAr ? "تُفحص كل الحسابات داخل هذه الـ OU وفروعها. اتركه فارغاً لفحص Base DN بالكامل" : "All accounts inside this OU (and sub-OUs) are scanned. Leave empty to scan the entire Base DN")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i> @(isAr ? "إشعار البريد الإلكتروني (سبب التعطيل)" : "Email Notification (disable reason)")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" @(Model.EnableEmailNotification ? "checked" : "") id="chkEmailEmpty">
+                            <input type="hidden" name="EnableEmailNotification" value="false" />
+                            <label class="form-check-label" for="chkEmailEmpty">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" value="@Model.NotificationEmail"
+                               placeholder="admin@company.com; hr@company.com" />
+                        <div class="form-text">@(isAr ? "يدعم عدة عناوين مفصولة بـ ;" : "Multiple addresses separated by ;")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent" value="@Model.EmailSubject"
+                               placeholder="@(isAr ? "تعطيل حساب لنقص بيانات: {SAM_ACCOUNT}" : "Account disabled (missing data): {SAM_ACCOUNT}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="4"
+                                  placeholder="@(isAr ? "اتركه فارغاً لاستخدام القالب الافتراضي" : "Leave empty to use default template")">@Model.EmailBodyTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {EMPLOYEE_NAME}, {SAM_ACCOUNT}, {EMPTY_ATTRIBUTES}, {DN}" : "Variables: {EMPLOYEE_NAME}, {SAM_ACCOUNT}, {EMPTY_ATTRIBUTES}, {DN}")</div>
+                    </div>
+                </div>
+            </div>
+            }
+
+            @if (Model.ServiceType == "InactiveDisable")
+            {
+            <!-- Inactive-Account Disable Settings -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-clock-history me-2 text-danger"></i> @(isAr ? "إعدادات تعطيل الحسابات غير المستخدمة" : "Inactive-Account Disable Settings")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "عدد أشهر عدم الاستخدام" : "Inactivity (months)") <span class="text-danger">*</span></label>
+                        <input type="number" name="InactivityMonths" class="form-control bg-transparent" value="@Model.InactivityMonths" min="1" max="120" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "سمة آخر تسجيل دخول" : "Last-logon attribute")</label>
+                        <input type="text" name="LastLogonAttribute" class="form-control bg-transparent" value="@Model.LastLogonAttribute" placeholder="lastLogonTimestamp" />
+                        <div class="form-text">@(isAr ? "افتراضي lastLogonTimestamp — عند غيابه يُعتمد whenCreated" : "Default lastLogonTimestamp — falls back to whenCreated")</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة للفحص" : "OU to Scan") <span class="text-danger">*</span></label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent" value="@Model.OffboardingSearchOU"
+                               placeholder="@(isAr ? "مثال: OU=Employees,DC=company,DC=com" : "e.g., OU=Employees,DC=company,DC=com")" />
+                        <div class="form-text text-warning">@(isAr ? "مطلوب — لا يُسمح بفحص الدومين كاملاً" : "Required — a domain-wide sweep is not allowed")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-chat-dots-fill me-2 text-success"></i> @(isAr ? "إشعار SMS للمستخدم" : "SMS to the user")</h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableSms" value="true" @(Model.EnableSms ? "checked" : "") id="chkSmsInactive">
+                            <input type="hidden" name="EnableSms" value="false" />
+                            <label class="form-check-label" for="chkSmsInactive">@(isAr ? "تفعيل إرسال SMS للمستخدم" : "Enable SMS to the user")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "خاصية AD لرقم الجوال" : "AD Phone Attribute")</label>
+                        <input type="text" name="PhoneColumn" class="form-control bg-transparent" value="@Model.PhoneColumn" placeholder="mobile" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "مزود SMS" : "SMS Provider")</label>
+                        <select name="SmsProviderId" class="form-select bg-transparent" id="smsProviderSelect" data-selected="@Model.SmsProviderId">
+                            <option value="">@(isAr ? "-- اختر مزوداً --" : "-- Select provider --")</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "قالب الرسالة" : "SMS Template")</label>
+                        <textarea name="SmsTemplate" class="form-control bg-transparent" rows="2"
+                                  placeholder="@(isAr ? "تم تعطيل حسابك {SAM_ACCOUNT} لعدم الاستخدام منذ {INACTIVE_MONTHS} شهراً." : "Your account {SAM_ACCOUNT} was disabled after {INACTIVE_MONTHS} months of inactivity.")">@Model.SmsTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {SAM_ACCOUNT}, {DISPLAY_NAME}, {INACTIVE_MONTHS}" : "Variables: {SAM_ACCOUNT}, {DISPLAY_NAME}, {INACTIVE_MONTHS}")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i> @(isAr ? "إشعار البريد للإدارة (ملخّص)" : "Email to administration (summary)")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" @(Model.EnableEmailNotification ? "checked" : "") id="chkEmailInactive">
+                            <input type="hidden" name="EnableEmailNotification" value="false" />
+                            <label class="form-check-label" for="chkEmailInactive">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" value="@Model.NotificationEmail" placeholder="admin@company.com; it@company.com" />
+                        <div class="form-text">@(isAr ? "بريد ملخّص واحد في نهاية التشغيل. يدعم عدة عناوين بـ ;" : "One summary email at the end. Multiple addresses separated by ;")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent" value="@Model.EmailSubject"
+                               placeholder="@(isAr ? "تعطيل حسابات غير مستخدمة: {COUNT}" : "Inactive accounts disabled: {COUNT}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="4"
+                                  placeholder="@(isAr ? "اتركه فارغاً للقالب الافتراضي" : "Leave empty to use default template")">@Model.EmailBodyTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {COUNT}, {INACTIVE_MONTHS}, {ROWS}" : "Variables: {COUNT}, {INACTIVE_MONTHS}, {ROWS}")</div>
+                    </div>
+                </div>
+            </div>
+            }
+
+            @if (Model.ServiceType == "AdAudit")
+            {
+                var rt = Model.ReportType ?? "PrivilegedGroups";
+            <!-- AD Audit / Report Settings -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-shield-check me-2 text-primary"></i> @(isAr ? "إعدادات تدقيق / تقارير AD" : "AD Audit / Report Settings")</h6>
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "نوع التقرير" : "Report type") <span class="text-danger">*</span></label>
+                        <select name="ReportType" id="reportType" class="form-select bg-transparent" onchange="onReportTypeChange()">
+                            <option value="PrivilegedGroups" selected="@(rt == "PrivilegedGroups")">@(isAr ? "المجموعات الإدارية (+ تنبيه التغييرات)" : "Privileged groups (+ change alerts)")</option>
+                            <option value="PasswordNeverExpires" selected="@(rt == "PasswordNeverExpires")">@(isAr ? "كلمة المرور لا تنتهي" : "Password never expires")</option>
+                            <option value="DuplicateAccounts" selected="@(rt == "DuplicateAccounts")">@(isAr ? "الحسابات المكرّرة" : "Duplicate accounts")</option>
+                            <option value="LockedAccounts" selected="@(rt == "LockedAccounts")">@(isAr ? "الحسابات المقفلة" : "Locked accounts")</option>
+                            <option value="AccessCertification" selected="@(rt == "AccessCertification")">@(isAr ? "شهادة الوصول (عضوية المجموعات)" : "Access certification (group membership)")</option>
+                            <option value="NonHumanInventory" selected="@(rt == "NonHumanInventory")">@(isAr ? "🤖 جرد الحسابات غير البشرية (حسابات الخدمة)" : "🤖 Non-human account inventory (service accounts)")</option>
+                        </select>
+                        <div class="form-text">@(isAr ? "النتائج في سجلّ التدقيق (بتصدير Excel) + بريد ملخّص. قراءة فقط إلا عند اختيار «إزالة»." : "Findings in the audit log (with Excel export) + a summary email. Read-only unless \"Remove\" is chosen.")</div>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة (اختياري)" : "OU to Scan (optional)")</label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent" value="@Model.OffboardingSearchOU"
+                               placeholder="@(isAr ? "فارغ = فحص Base DN بالكامل" : "empty = scan the entire Base DN")" />
+                    </div>
+                    <div class="col-12" id="auditGroupsGroup">
+                        <label class="form-label">@(isAr ? "المجموعات المطلوب تدقيقها (مفصولة بفاصلة)" : "Groups to audit (comma-separated)")</label>
+                        <input type="text" name="AuditGroups" class="form-control bg-transparent" value="@Model.AuditGroups"
+                               placeholder="Domain Admins, Enterprise Admins, Administrators" />
+                        <div class="form-text">@(isAr ? "اسم المجموعة أو DN. للمجموعات الإدارية فارغ = الافتراضيات المعروفة. في AD المُعرَّب استخدم الأسماء المحلية." : "Group name or DN. For privileged groups empty = well-known defaults. On localized AD use local names.")</div>
+                        @* For the inventory this field means something else: not what to list, but what counts as privileged when cross-checking the accounts found. *@
+                        <div class="form-text text-warning" id="nhiGroupsHint" style="display:none">
+                            @(isAr
+                                ? "في تقرير الجرد: هذه هي المجموعات التي تُعتبر «إدارية» عند فحص الحسابات غير البشرية. فارغ = الافتراضيات الإنجليزية المعروفة (وفي AD مُعرَّب لن تُوجد، فيظهر تنبيه في التقرير بدل تعليم أي حساب)."
+                                : "For the inventory this is what counts as privileged when cross-checking the accounts found. Empty = the well-known English defaults, which do not exist on a localized AD — the report then says so instead of flagging nothing.")
+                        </div>
+                    </div>
+                    <div class="col-md-5" id="duplicateAttrGroup">
+                        <label class="form-label">@(isAr ? "السمة المطلوب كشف تكرارها" : "Attribute to check for duplicates")</label>
+                        <input type="text" name="DuplicateAttribute" class="form-control bg-transparent" value="@Model.DuplicateAttribute" placeholder="employeeID / mail" />
+                    </div>
+
+                    @{ var pwdAct = string.Equals(Model.PwdNeverExpiresAction, "Remove", StringComparison.OrdinalIgnoreCase) ? "Remove" : "Report"; }
+                    <div class="col-12" id="pwdActionGroup">
+                        <label class="form-label">@(isAr ? "الإجراء على «كلمة المرور لا تنتهي»" : "Action on \"password never expires\"")</label>
+                        <select name="PwdNeverExpiresAction" id="pwdNeverExpiresAction" class="form-select bg-transparent" onchange="onPwdActionChange()">
+                            <option value="Report" selected="@(pwdAct == "Report")">@(isAr ? "تقرير فقط (لا يعدّل AD)" : "Report only (does not modify AD)")</option>
+                            <option value="Remove" selected="@(pwdAct == "Remove")">@(isAr ? "إزالة العلم فعلياً من الحسابات" : "Actually remove the flag from accounts")</option>
+                        </select>
+                        <div class="form-text">
+                            @(isAr
+                                ? "«إزالة» تُلغي علم DONT_EXPIRE_PASSWORD فتبدأ كلمات المرور بالانتهاء وفق سياسة الدومين."
+                                : "\"Remove\" clears the DONT_EXPIRE_PASSWORD flag, so those passwords begin expiring under the domain policy.")
+                        </div>
+                        <div id="pwdRemoveWarning" class="alert alert-warning py-2 px-3 mt-2 fs-xs mb-0" style="display:none">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                            @(isAr
+                                ? "تحذير: حسابات الخدمة تعتمد غالباً على كلمة مرور دائمة وستتوقّف عند أول انتهاء. الإزالة تتطلّب تحديد OU، وتحترم مجموعة الاستثناء. شغّل «تقرير فقط» أولاً."
+                                : "Warning: service accounts often depend on a non-expiring password and will stop working at the first expiry. Removal requires a Search OU and honours the exclusion group. Run \"Report only\" first.")
+                        </div>
+                    </div>
+
+                    <div class="col-12" id="pwdExclusionGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "مجموعة الاستثناء من الإزالة (اختياري)" : "Exclusion group for removal (optional)")</label>
+                        <input type="text" name="OffboardingExclusionGroup" class="form-control bg-transparent" value="@Model.OffboardingExclusionGroup"
+                               placeholder="@(isAr ? "اسم مجموعة أو DN — أعضاؤها لا يُمسّون" : "Group name or DN — its members are left untouched")" />
+                        <div class="form-text">@(isAr ? "تشمل العضوية المتداخلة. مجموعة غير موجودة = إيقاف الخدمة." : "Nested membership included. A group that does not exist aborts the run.")</div>
+                    </div>
+
+                    @* ── Non-human account inventory ──
+                       Every rule below is stored per service and empty by default: what counts as
+                       a service account is institutional policy, and a default guessed in code
+                       would produce a confident, wrong number at the next installation. *@
+                    @{ var nhiMode = string.Equals(Model.NhiMatchMode, "All", StringComparison.OrdinalIgnoreCase) ? "All" : "Any"; }
+                    <div class="col-12" id="nhiGroup" style="display:none">
+                        <hr class="my-3 opacity-10">
+                        <h6 class="fw-700 mb-2"><i class="bi bi-robot me-2 text-info"></i>@(isAr ? "تعريف الحساب غير البشري" : "What counts as a non-human account")</h6>
+                        <div class="alert alert-info py-2 px-3 fs-xs">
+                            <i class="bi bi-info-circle me-1"></i>
+                            @(isAr
+                                ? "التقرير قراءة فقط دائماً — لا يعطّل ولا ينقل ولا يعدّل أي حساب. لا يوجد اصطلاح تسمية مبني في النظام: اضبط إشارة واحدة على الأقل، وإلا توقّفت الخدمة برسالة واضحة بدل أن تُخرج تقريراً فارغاً يبدو كأنه «لا توجد حسابات خدمة»."
+                                : "This report is always read-only — it never disables, moves, or modifies an account. No naming convention is built in: configure at least one signal, or the run stops with a clear message rather than producing an empty report that reads as \"there are no service accounts\".")
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "أنماط الأسماء" : "Name patterns")</label>
+                                <input type="text" name="NhiNamePatterns" class="form-control bg-transparent" value="@Model.NhiNamePatterns" placeholder="svc_*, sa-*, *_bot, app*" />
+                                <div class="form-text">@(isAr ? "مفصولة بفاصلة، و* حرف بدل. تُطابَق على sAMAccountName." : "Comma-separated; * is a wildcard. Matched against sAMAccountName.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "وضع المطابقة بين الإشارات" : "How signals combine")</label>
+                                <select name="NhiMatchMode" class="form-select bg-transparent">
+                                    <option value="Any" selected="@(nhiMode == "Any")">@(isAr ? "أيّ إشارة تكفي (Any) — الأوسع" : "Any signal is enough — broadest")</option>
+                                    <option value="All" selected="@(nhiMode == "All")">@(isAr ? "يجب تحقّق كل الإشارات (All) — الأضيق" : "All signals must hold — narrowest")</option>
+                                </select>
+                                <div class="form-text">@(isAr ? "«كلها» يفيد للتضييق، مثل: اسمه svc_* وليس مُداراً بالمزامنة." : "\"All\" is for narrowing, e.g. named svc_* AND not managed by sync.")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "الـ OUs التي حساباتها غير بشرية" : "OUs whose accounts are non-human")</label>
+                                <input type="text" name="NhiOUs" class="form-control bg-transparent" value="@Model.NhiOUs" placeholder="OU=ServiceAccounts,DC=example,DC=com" />
+                                <div class="form-text">@(isAr ? "DN كامل، مفصولة بفاصلة. يجب أن تقع داخل نطاق الفحص أعلاه، وOU غير موجودة توقف التشغيلة." : "Full DNs, comma-separated. Must sit inside the scan scope above; an OU that does not exist aborts the run.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "مجموعات تدلّ على أن الحساب غير بشري" : "Groups that mark an account as non-human")</label>
+                                <input type="text" name="NhiGroups" class="form-control bg-transparent" value="@Model.NhiGroups" placeholder="Service Accounts, App Identities" />
+                                <div class="form-text">@(isAr ? "اسم أو DN، وتشمل العضوية المتداخلة. مجموعة غير موجودة توقف التشغيلة (فالجرد الناقص يقرأ كأنه دومين نظيف)." : "Name or DN; nested membership included. A group that does not exist aborts the run — an undercount reads as a clean domain.")</div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">@(isAr ? "قواعد سمة = قيمة" : "Attribute = value rules")</label>
+                                <input type="text" name="NhiAttributeRules" class="form-control bg-transparent" value="@Model.NhiAttributeRules" placeholder="employeeType=service, extensionAttribute5=svc" />
+                                <div class="form-text">@(isAr ? "مفصولة بفاصلة. صيغة خاطئة توقف التشغيلة بدل أن تُتخطّى بصمت." : "Comma-separated. A malformed rule aborts the run instead of being silently skipped.")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiFlagHasSpn" value="true" id="nhiSpn" checked="@Model.NhiFlagHasSpn" />
+                                    <input type="hidden" name="NhiFlagHasSpn" value="false" />
+                                    <label class="form-check-label" for="nhiSpn">@(isAr ? "يحمل servicePrincipalName" : "Carries a servicePrincipalName")</label>
+                                </div>
+                                <div class="form-text">@(isAr ? "حساب مستخدم بـ SPN هو حساب خدمة بحكم التعريف — أقوى إشارة محايدة." : "A user account with an SPN is a service account by definition — the strongest vendor-neutral signal.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiIncludeManagedServiceAccounts" value="true" id="nhiGmsa" checked="@Model.NhiIncludeManagedServiceAccounts" />
+                                    <input type="hidden" name="NhiIncludeManagedServiceAccounts" value="false" />
+                                    <label class="form-check-label" for="nhiGmsa">@(isAr ? "تضمين حسابات الخدمة المُدارة (gMSA/MSA)" : "Include managed service accounts (gMSA/MSA)")</label>
+                                </div>
+                                <div class="form-text">@(isAr ? "غير بشرية بحكم التعريف، فتُضاف دائماً مهما كان وضع المطابقة." : "Non-human by definition, so they are always added whatever the match mode says.")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiFlagPwdNeverExpires" value="true" id="nhiPwd" checked="@Model.NhiFlagPwdNeverExpires" />
+                                    <input type="hidden" name="NhiFlagPwdNeverExpires" value="false" />
+                                    <label class="form-check-label" for="nhiPwd">@(isAr ? "كلمة مروره لا تنتهي" : "Password never expires")</label>
+                                </div>
+                                <div class="form-text">@(isAr ? "إشارة عملية قوية، لكنها في وضع «أيّ منها» تجرّ حسابات بشرية عليها نفس العلم." : "A strong practical signal, but under \"Any\" it also pulls in human accounts carrying the same flag.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiFlagNoKeyAttribute" value="true" id="nhiNoKey" checked="@Model.NhiFlagNoKeyAttribute" />
+                                    <input type="hidden" name="NhiFlagNoKeyAttribute" value="false" />
+                                    <label class="form-check-label" for="nhiNoKey">@(isAr ? "لا يحمل سمة المفتاح (خارج إدارة المزامنة)" : "Has no key attribute (outside sync management)")</label>
+                                </div>
+                                <div class="form-text text-warning">@(isAr ? "واسعة جداً وحدها في وضع «أيّ منها»: تشمل كل حساب بشري غير مُدار. استخدمها في وضع «كلها» كشرط تضييق." : "Very broad on its own under \"Any\" — it includes every unmanaged human account. Use it under \"All\" as a narrowing condition.")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "عمر الاعتماد الذي يُعتبر بعده قديماً (أيام)" : "Credential is stale after (days)")</label>
+                                <input type="number" name="NhiCredentialMaxAgeDays" class="form-control bg-transparent" value="@Model.NhiCredentialMaxAgeDays" min="0" />
+                                <div class="form-text">@(isAr ? "0 = تعطيل الفحص. يُقاس من pwdLastSet." : "0 disables the check. Measured from pwdLastSet.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "مدة الخمول (أيام)" : "Dormant after (days)")</label>
+                                <input type="number" name="NhiDormantDays" class="form-control bg-transparent" value="@Model.NhiDormantDays" min="0" />
+                                <div class="form-text">@(isAr ? "0 = تعطيل الفحص. يُقرأ النشاط من سمة آخر دخول، وعند غيابها من whenCreated." : "0 disables the check. Activity is read from the last-logon attribute, falling back to whenCreated.")</div>
+                            </div>
+
+                            @* ── دورة الحياة ── *@
+                            <div class="col-12">
+                                <hr class="my-2 opacity-10">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiLifecycleEnabled" value="true"
+                                           @(Model.NhiLifecycleEnabled ? "checked" : "") id="nhiLifecycle" onchange="onNhiLifecycleChange()">
+                                    <input type="hidden" name="NhiLifecycleEnabled" value="false" />
+                                    <label class="form-check-label fw-600" for="nhiLifecycle">
+                                        @(isAr ? "تفعيل دورة الحياة (مطالبة بالمالك، إقرار دوري، حجر)" : "Enable the lifecycle (owner claim, periodic attestation, quarantine)")
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    @(isAr
+                                        ? "بدونها يبقى الجرد تقريراً يُقرأ ويُنسى. بتفعيلها يصير هذا الحساب متعقَّباً عبر التشغيلات، ويمكن أن يُحجر."
+                                        : "Without it the inventory is a report that is read and forgotten. With it, accounts are tracked across runs and can be quarantined.")
+                                </div>
+                            </div>
+
+                            <div id="nhiLifecycleFields" class="col-12" style="display:none">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">@(isAr ? "مهلة المطالبة بالمالك (أيام)" : "Owner-claim window (days)")</label>
+                                        <input type="number" name="NhiClaimDays" class="form-control bg-transparent" value="@Model.NhiClaimDays" min="1" />
+                                        <div class="form-text text-warning">
+                                            @(isAr
+                                                ? "لا تقبل صفراً: مهلة صفر تحجر كل حساب يجده أول مسح."
+                                                : "Zero is refused: a zero window quarantines every account the first scan finds.")
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">@(isAr ? "دورية الإقرار (أيام)" : "Attestation period (days)")</label>
+                                        <input type="number" name="NhiAttestationDays" class="form-control bg-transparent" value="@Model.NhiAttestationDays" min="1" />
+                                        <div class="form-text">@(isAr ? "كل كم يوماً يُعيد المالك تأكيد الحاجة إلى الحساب." : "How often the owner re-confirms the account is needed.")</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">@(isAr ? "مهلة السماح بعد الإقرار (أيام)" : "Grace after attestation lapses (days)")</label>
+                                        <input type="number" name="NhiAttestationGraceDays" class="form-control bg-transparent" value="@Model.NhiAttestationGraceDays" min="0" />
+                                        <div class="form-text">@(isAr ? "الفترة بين «تأخّرت» و«فقدتَه»." : "The window between \"you are late\" and \"you have lost it\".")</div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">@(isAr ? "ما يفعله الحجر بالدليل" : "What quarantine does to the directory")</label>
+                                        <select name="NhiQuarantineMode" class="form-select bg-transparent" id="nhiQuarantineMode" onchange="onNhiLifecycleChange()">
+                                            @{ var qm = string.IsNullOrWhiteSpace(Model.NhiQuarantineMode) ? "Report" : Model.NhiQuarantineMode; }
+                                            <option value="Report" selected="@(qm == "Report")">@(isAr ? "تسجيل فقط — لا يُلمس الدليل (افتراضي)" : "Record only — the directory is not touched (default)")</option>
+                                            <option value="RemovePrivilege" selected="@(qm == "RemovePrivilege")">@(isAr ? "إخراج من المجموعات الإدارية" : "Remove from administrative groups")</option>
+                                            <option value="Disable" selected="@(qm == "Disable")">@(isAr ? "تعطيل الحساب" : "Disable the account")</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">@(isAr ? "سقف الحجر في التشغيلة الواحدة (٪)" : "Quarantine ceiling per run (%)")</label>
+                                        <input type="number" name="NhiMaxQuarantinePercent" class="form-control bg-transparent" value="@Model.NhiMaxQuarantinePercent" min="1" max="100" />
+                                        <div class="form-text">
+                                            @(isAr
+                                                ? "تجاوزه يوقف الحجر للتشغيلة كلها ويُرفع — حجر معظم حسابات دومين مصنِّفٌ واسع لا سياسة تعمل."
+                                                : "Exceeding it stops quarantine for the whole run and raises it — quarantining most of a domain is a broad classifier, not policy working.")
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12" id="nhiEnforceWarning" style="display:none">
+                                        <div class="alert alert-warning border-0 mb-0">
+                                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                            @(isAr
+                                                ? "هذا الوضع يكتب في الدليل. تعطيل حساب خدمة يكسر ما يعتمد عليه في ساعة لا يربطها أحد بهذه التشغيلة. ولن يُنفَّذ إطلاقاً ما لم تُحلّ كل حسابات ربط IdentitySyncPro في الدليل، ولا يُلمس حساب ربط ولا عضو في مجموعة الاستثناء."
+                                                : "This mode writes to the directory. Disabling a service account breaks whatever depends on it at an hour nobody connects to this run. It is refused entirely unless every IdentitySyncPro bind account resolves, and it never touches a bind account or a member of the exclusion group.")
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label">@(isAr ? "بريد متابعة الحسابات غير البشرية" : "Non-human follow-up mailbox")</label>
+                                        <input type="email" name="NhiOwnerNotificationEmail" class="form-control bg-transparent" value="@Model.NhiOwnerNotificationEmail" />
+                                        <div class="form-text">
+                                            @(isAr
+                                                ? "يصله ملخّص يومي بكل ما يستحق المتابعة — بما فيه المالكون الذين تعذّر الوصول إلى بريدهم. اتركه فارغاً وقد لا يعلم أحدٌ بحساب يوشك أن يُحجر."
+                                                : "Receives the daily digest of everything due — including owners whose address could not be resolved. Leave it empty and an account about to be quarantined may reach nobody.")
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i> @(isAr ? "إشعار البريد بالتقرير" : "Email the report")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" @(Model.EnableEmailNotification ? "checked" : "") id="chkEmailAudit">
+                            <input type="hidden" name="EnableEmailNotification" value="false" />
+                            <label class="form-check-label" for="chkEmailAudit">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" value="@Model.NotificationEmail" placeholder="security@company.com; it@company.com" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent" value="@Model.EmailSubject"
+                               placeholder="@(isAr ? "تقرير تدقيق AD — {REPORT}: {COUNT}" : "AD audit report — {REPORT}: {COUNT}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="3"
+                                  placeholder="@(isAr ? "اتركه فارغاً للقالب الافتراضي" : "Leave empty to use default template")">@Model.EmailBodyTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {REPORT}, {COUNT}, {ROWS}, {MORE}" : "Variables: {REPORT}, {COUNT}, {ROWS}, {MORE}")</div>
+                    </div>
+                </div>
+            </div>
+            }
+
+            @if (Model.ServiceType == "ExpiryDisable")
+            {
+            <!-- Expiry Warning / Disable Settings -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-calendar-x me-2 text-danger"></i> @(isAr ? "إعدادات تنبيه الانتهاء والتعطيل" : "Expiry Warning / Disable Settings")</h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "سمة تاريخ الانتهاء" : "Expiry attribute")</label>
+                        <input type="text" name="ExpiryAttribute" class="form-control bg-transparent" value="@Model.ExpiryAttribute" placeholder="accountExpires" />
+                        <div class="form-text">@(isAr ? "افتراضي accountExpires. تقبل سمة مخصّصة بتاريخ/FILETIME" : "Default accountExpires. Accepts a custom date/FILETIME attribute")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "أيام التنبيه قبل الانتهاء" : "Warning days before expiry")</label>
+                        <input type="text" name="ExpiryWarnDays" class="form-control bg-transparent" value="@Model.ExpiryWarnDays" placeholder="30,7,1" />
+                        <div class="form-text">@(isAr ? "قائمة مفصولة بفاصلة — يُنصح بتشغيل يومي" : "Comma-separated milestones — run daily")</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة للفحص" : "OU to Scan") <span class="text-danger">*</span></label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent" value="@Model.OffboardingSearchOU"
+                               placeholder="@(isAr ? "مثال: OU=Contractors,DC=company,DC=com" : "e.g., OU=Contractors,DC=company,DC=com")" />
+                        <div class="form-text text-warning">@(isAr ? "مطلوب — العملية تعطّل حسابات بعد الانتهاء" : "Required — the service disables accounts after expiry")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-chat-dots-fill me-2 text-success"></i> @(isAr ? "إشعار SMS للمستخدم" : "SMS to the user")</h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableSms" value="true" @(Model.EnableSms ? "checked" : "") id="chkSmsExpiry">
+                            <input type="hidden" name="EnableSms" value="false" />
+                            <label class="form-check-label" for="chkSmsExpiry">@(isAr ? "تفعيل إرسال SMS للمستخدم (تحذير + تعطيل)" : "Enable SMS to the user (warning + disable)")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "خاصية AD لرقم الجوال" : "AD Phone Attribute")</label>
+                        <input type="text" name="PhoneColumn" class="form-control bg-transparent" value="@Model.PhoneColumn" placeholder="mobile" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "مزود SMS" : "SMS Provider")</label>
+                        <select name="SmsProviderId" class="form-select bg-transparent" id="smsProviderSelect">
+                            <option value="">@(isAr ? "-- اختر مزوداً --" : "-- Select provider --")</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "قالب الرسالة" : "SMS Template")</label>
+                        <textarea name="SmsTemplate" class="form-control bg-transparent" rows="2"
+                                  placeholder="@(isAr ? "ينتهي حسابك {SAM_ACCOUNT} خلال {DAYS} يوم بتاريخ {EXPIRY_DATE}." : "Your account {SAM_ACCOUNT} expires in {DAYS} days on {EXPIRY_DATE}.")">@Model.SmsTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {SAM_ACCOUNT}, {DISPLAY_NAME}, {DAYS}, {EXPIRY_DATE}" : "Variables: {SAM_ACCOUNT}, {DISPLAY_NAME}, {DAYS}, {EXPIRY_DATE}")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i> @(isAr ? "إشعار البريد للإدارة (ملخّص)" : "Email to administration (summary)")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" @(Model.EnableEmailNotification ? "checked" : "") id="chkEmailExpiry">
+                            <input type="hidden" name="EnableEmailNotification" value="false" />
+                            <label class="form-check-label" for="chkEmailExpiry">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" value="@Model.NotificationEmail" placeholder="admin@company.com; it@company.com" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent" value="@Model.EmailSubject"
+                               placeholder="@(isAr ? "تنبيه انتهاء — تحذير: {WARNED} / تعطيل: {DISABLED}" : "Expiry — warned: {WARNED} / disabled: {DISABLED}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="3"
+                                  placeholder="@(isAr ? "اتركه فارغاً للقالب الافتراضي" : "Leave empty to use default template")">@Model.EmailBodyTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {WARNED}, {DISABLED}, {WARN_TABLE}, {DISABLE_TABLE}" : "Variables: {WARNED}, {DISABLED}, {WARN_TABLE}, {DISABLE_TABLE}")</div>
+                    </div>
+                </div>
+            </div>
+            }
+
+            @if (Model.ServiceType == "OrphanCleanup")
+            {
+            <!-- Orphaned-Account Settings -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-person-dash me-2 text-danger"></i> @(isAr ? "إعدادات الحسابات اليتيمة" : "Orphaned-Account Settings")</h6>
+                <div class="alert alert-info py-2 px-3 fs-xs">
+                    <i class="bi bi-info-circle me-1"></i>@(isAr
+                        ? "يقرأ مفاتيح المصدر (قاعدة البيانات + عمود المفتاح أدناه) ويطابقها بحسابات AD. الحساب الذي يحمل سمة المفتاح ومفتاحه غير موجود في المصدر = يتيم."
+                        : "Reads source keys (source DB + key column below) and matches them against AD. An account carrying the key attribute whose key is missing from the source = orphan.")}
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "الإجراء" : "Action") <span class="text-danger">*</span></label>
+                        <select name="OrphanAction" id="orphanAction" class="form-select bg-transparent" onchange="onOrphanActionChange()">
+                            <option value="Report" selected="@((Model.OrphanAction ?? "Report") == "Report")">@(isAr ? "تقرير فقط" : "Report only")</option>
+                            <option value="Disable" selected="@(Model.OrphanAction == "Disable")">@(isAr ? "تعطيل في المكان" : "Disable in place")</option>
+                            <option value="DisableAndMove" selected="@(Model.OrphanAction == "DisableAndMove")">@(isAr ? "تعطيل + نقل لـ OU حجر" : "Disable + move to quarantine OU")</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "حدّ أمان المصدر" : "Source safety min")</label>
+                        <input type="number" name="MinSourceRecords" class="form-control bg-transparent" value="@Model.MinSourceRecords" min="1" />
+                        <div class="form-text">@(isAr ? "توقّف بلا إجراء إن رجع المصدر أقل من هذا" : "Abort if the source returns fewer than this")</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة للفحص" : "OU to Scan") <span class="text-danger">*</span></label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent" value="@Model.OffboardingSearchOU"
+                               placeholder="@(isAr ? "مثال: OU=Users,DC=company,DC=com" : "e.g., OU=Users,DC=company,DC=com")" />
+                        <div class="form-text text-warning">@(isAr ? "مطلوب — OU التي تديرها المزامنة" : "Required — the OU that sync manages")</div>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label">@(isAr ? "مجموعة الاستثناء" : "Exclusion group")</label>
+                        <input type="text" name="OffboardingExclusionGroup" class="form-control bg-transparent" value="@Model.OffboardingExclusionGroup"
+                               placeholder="@(isAr ? "break-glass / حسابات الخدمة" : "break-glass / service accounts")" />
+                        <div class="form-text">@(isAr ? "مجموعة غير موجودة = توقّف الخدمة (حماية)" : "A missing group aborts the run (safety)")</div>
+                    </div>
+                    <div class="col-md-5" id="quarantineOuGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "OU الحجر (للنقل)" : "Quarantine OU (for move)") <span class="text-danger">*</span></label>
+                        <input type="text" name="TargetOU" class="form-control bg-transparent" value="@Model.TargetOU" placeholder="OU=Orphaned,DC=company,DC=com" />
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i> @(isAr ? "إشعار البريد للإدارة" : "Email to administration")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" @(Model.EnableEmailNotification ? "checked" : "") id="chkEmailOrphan">
+                            <input type="hidden" name="EnableEmailNotification" value="false" />
+                            <label class="form-check-label" for="chkEmailOrphan">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" value="@Model.NotificationEmail" placeholder="security@company.com; it@company.com" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent" value="@Model.EmailSubject"
+                               placeholder="@(isAr ? "الحسابات اليتيمة — {COUNT} ({ACTION})" : "Orphaned accounts — {COUNT} ({ACTION})")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="3"
+                                  placeholder="@(isAr ? "اتركه فارغاً للقالب الافتراضي" : "Leave empty to use default template")">@Model.EmailBodyTemplate</textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {COUNT}, {ACTION}, {ROWS}" : "Variables: {COUNT}, {ACTION}, {ROWS}")</div>
+                    </div>
+                </div>
+            </div>
+            }
+
+            @if (Model.ServiceType != "EmptyAttrDisable" && Model.ServiceType != "InactiveDisable" && Model.ServiceType != "AdAudit" && Model.ServiceType != "ExpiryDisable")
+            {
+            <!-- Source Database -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-database-fill me-2 text-info"></i> @(isAr ? "قاعدة البيانات المصدر" : "Source Database")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "النوع" : "Provider")</label>
+                        <select name="SourceProvider" class="form-select bg-transparent" id="sourceProvider">
+                            <option value="SqlServer" selected="@(Model.SourceProvider == "SqlServer")">SQL Server</option>
+                            <option value="Oracle" selected="@(Model.SourceProvider == "Oracle")">Oracle</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الخادم" : "Host")</label>
+                        <input type="text" name="SourceHost" class="form-control bg-transparent" value="@Model.SourceHost" id="srcHost" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">@(isAr ? "المنفذ" : "Port")</label>
+                        <input type="number" name="SourcePort" class="form-control bg-transparent" value="@Model.SourcePort" id="srcPort" />
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check form-switch mt-4" id="integratedSecurityGroup">
+                            <input class="form-check-input" type="checkbox" name="SourceIntegratedSecurity" value="true"
+                                   @(Model.SourceIntegratedSecurity ? "checked" : "") id="chkIntegrated">
+                            <label class="form-check-label" for="chkIntegrated">@(isAr ? "Win Auth" : "Win Auth")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "قاعدة البيانات" : "Database")</label>
+                        <input type="text" name="SourceDatabase" class="form-control bg-transparent" value="@Model.SourceDatabase" id="srcDatabase" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "المستخدم" : "Username")</label>
+                        <input type="text" name="SourceUsername" class="form-control bg-transparent" value="@Model.SourceUsername" id="srcUsername" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "كلمة المرور" : "Password")</label>
+                        <input type="password" name="SourcePassword" class="form-control bg-transparent" placeholder="@(isAr ? "اتركه فارغاً لعدم التغيير" : "Leave empty to keep")" id="srcPassword" />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الفيو / الجدول" : "View / Table")</label>
+                        <input type="text" name="SourceTableOrView" class="form-control bg-transparent" value="@Model.SourceTableOrView" id="srcView" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "عمود المفتاح" : "Key Column")</label>
+                        <input type="text" name="KeySourceColumn" class="form-control bg-transparent" value="@Model.KeySourceColumn" />
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" class="btn btn-outline-info w-100" id="btnTestSrc">
+                            <i class="bi bi-plug-fill me-1"></i> @(isAr ? "اختبار" : "Test")
+                        </button>
+                    </div>
+                </div>
+                <div id="srcTestResult" class="mt-2"></div>
+            </div>
+            }
+
+            <!-- AD Target -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-diagram-3-fill me-2 text-accent"></i> Active Directory</h6>
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الخادم" : "Server")</label>
+                        <input type="text" name="ADServer" class="form-control bg-transparent" value="@Model.ADServer" id="adServer" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">@(isAr ? "المنفذ" : "Port")</label>
+                        <input type="number" name="ADPort" class="form-control bg-transparent" value="@Model.ADPort" id="adPort" />
+                    </div>
+                    @{
+                        // Rows saved before the mode existed fall back to the legacy SSL switch.
+                        var svcModeVal = Model.ADSecurityModeSet ? (int)Model.ADSecurityMode : (Model.ADUseSsl ? 2 : 1);
+                    }
+                    <div class="col-md-2">
+                        <label class="form-label">@(isAr ? "تشفير القناة" : "Channel security")</label>
+                        <select name="ADSecurityMode" id="adSecurityMode" class="form-control bg-transparent">
+                            <option value="0" selected="@(svcModeVal == 0)">@(isAr ? "تلقائي" : "Auto")</option>
+                            <option value="1" selected="@(svcModeVal == 1)">@(isAr ? "sign & seal (389)" : "Sign & seal (389)")</option>
+                            <option value="2" selected="@(svcModeVal == 2)">@(isAr ? "LDAPS (636)" : "LDAPS (636)")</option>
+                            <option value="3" selected="@(svcModeVal == 3)">StartTLS (389)</option>
+                            <option value="4" selected="@(svcModeVal == 4)">@(isAr ? "بلا تشفير" : "No encryption")</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="ADAllowUntrustedCertificate" value="true" @(Model.ADAllowUntrustedCertificate ? "checked" : "") id="chkAdUntrusted">
+                            <label class="form-check-label fs-sm" for="chkAdUntrusted">@(isAr ? "قبول شهادة غير موثوقة (CA داخلي / self-signed)" : "Accept untrusted certificate (internal CA / self-signed)")</label>
+                        </div>
+                        <div id="adModeHint" class="alert alert-secondary py-1 px-2 mb-0 mt-2 fs-xs"></div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" class="btn btn-outline-info w-100" id="btnTestAd">
+                            <i class="bi bi-plug-fill me-1"></i> @(isAr ? "اختبار" : "Test")
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "المستخدم" : "Username")</label>
+                        <input type="text" name="ADUsername" class="form-control bg-transparent" value="@Model.ADUsername" id="adUsername" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "كلمة المرور" : "Password")</label>
+                        <input type="password" name="ADPassword" class="form-control bg-transparent" placeholder="@(isAr ? "اتركه فارغاً لعدم التغيير" : "Leave empty to keep")" id="adPassword" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Base DN</label>
+                        <input type="text" name="ADBaseDN" class="form-control bg-transparent" value="@Model.ADBaseDN" id="adBaseDN" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "خاصية البحث" : "Search Attribute")</label>
+                        <input type="text" name="ADSearchAttribute" class="form-control bg-transparent" value="@Model.ADSearchAttribute" />
+                    </div>
+                </div>
+                <div id="adTestResult" class="mt-2"></div>
+            </div>
+
+            <!-- Schedule -->
+            <div class="glass-card mb-3">
+                <h6 class="fw-700 mb-3"><i class="bi bi-clock-fill me-2 text-warning"></i> @(isAr ? "الجدولة" : "Schedule")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "النوع" : "Mode")</label>
+                        <select name="ScheduleMode" class="form-select bg-transparent" id="scheduleMode">
+                            <option value="daily" selected="@(Model.ScheduleMode == "daily")">@(isAr ? "يومي" : "Daily")</option>
+                            <option value="weekly" selected="@(Model.ScheduleMode == "weekly")">@(isAr ? "أسبوعي" : "Weekly")</option>
+                            <option value="monthly" selected="@(Model.ScheduleMode == "monthly")">@(isAr ? "شهري" : "Monthly")</option>
+                            <option value="interval" selected="@(Model.ScheduleMode == "interval")">@(isAr ? "فترة" : "Interval")</option>
+                            <option value="custom" selected="@(Model.ScheduleMode == "custom")">@(isAr ? "مخصص" : "Custom")</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3" id="timeGroup">
+                        <label class="form-label">@(isAr ? "الوقت" : "Time")</label>
+                        <input type="time" name="ScheduleTime" class="form-control bg-transparent" value="@(Model.ScheduleTime ?? "02:00")" />
+                    </div>
+                    <div class="col-md-3" id="intervalGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "الفترة (دقائق)" : "Interval (min)")</label>
+                        <input type="number" name="ScheduleIntervalMinutes" class="form-control bg-transparent" value="@(Model.ScheduleIntervalMinutes ?? 60)" min="5" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "تعبير Cron الحالي" : "Current Cron")</label>
+                        <input type="text" class="form-control bg-transparent text-muted" value="@(Model.ScheduleCron ?? "N/A")" readonly />
+                    </div>
+                </div>
+                @* 1-28 only: cron cannot say "last day", so day 31 never fires in five months of
+                   the year while the screen still shows a configured schedule. *@
+                <div class="mt-3" id="dayOfMonthGroup" style="@(Model.ScheduleMode == "monthly" ? "" : "display:none")">
+                    <label class="form-label">@(isAr ? "يوم الشهر" : "Day of month")</label>
+                    <input type="number" name="ScheduleDayOfMonth" class="form-control bg-transparent"
+                           value="@(Model.ScheduleDayOfMonth < 1 ? 1 : Model.ScheduleDayOfMonth)" min="1" max="28" style="max-width:200px" />
+                    <div class="form-text">
+                        @(isAr
+                            ? "من 1 إلى 28. الأيام 29–31 لا توجد في كل الشهور فتُتخطّى تلك الشهور بالكامل — للتشغيل في نهاية الشهر استخدم «مخصص»."
+                            : "1 to 28. Days 29-31 do not exist in every month and those months are skipped entirely — for a month-end run use \"Custom\".")
+                    </div>
+                </div>
+
+                @* The field this mode never had. Without it "custom" silently became a daily schedule. *@
+                <div class="mt-3" id="customCronGroup" style="@(Model.ScheduleMode == "custom" ? "" : "display:none")">
+                    <label class="form-label">@(isAr ? "تعبير Cron" : "Cron expression")</label>
+                    <input type="text" name="ScheduleCustomCron" class="form-control bg-transparent"
+                           value="@Model.ScheduleCustomCron" placeholder="0 2 1 * *" dir="ltr" />
+                    <div class="form-text">
+                        @(isAr
+                            ? "خمسة حقول: دقيقة ساعة يوم-الشهر شهر يوم-الأسبوع. مثال: 0 2 1 * * = الساعة 02:00 من أول كل شهر. التعبير الخاطئ يرفض الحفظ برسالة."
+                            : "Five fields: minute hour day-of-month month day-of-week. Example: 0 2 1 * * = 02:00 on the 1st of each month. An invalid expression refuses the save with a reason.")
+                    </div>
+                </div>
+
+                <div class="mt-3" id="daysGroup" style="@(Model.ScheduleMode == "weekly" ? "" : "display:none")">
+                    <label class="form-label">@(isAr ? "الأيام" : "Days")</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        @{
+                            var dayNames = isAr
+                                ? new[] { "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت" }
+                                : new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+                            var selectedDays = (Model.ScheduleDays ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
+                        }
+                        @for (int i = 0; i < 7; i++)
+                        {
+                            <label class="btn btn-outline-secondary btn-sm day-btn @(selectedDays.Contains(i.ToString()) ? "active-day" : "")">
+                                <input type="checkbox" class="d-none day-checkbox" value="@i" @(selectedDays.Contains(i.ToString()) ? "checked" : "")> @dayNames[i]
+                            </label>
+                        }
+                    </div>
+                    <input type="hidden" name="ScheduleDays" id="scheduleDays" value="@Model.ScheduleDays" />
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-accent btn-lg w-100">
+                <i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ التغييرات" : "Save Changes")
+            </button>
+        </form>
+    </div>
+
+    <!-- Tab: Field Mapping -->
+    <div class="tab-pane fade" id="tabMapping">
+        <div class="glass-card mb-3">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="fw-700 mb-0">
+                    <i class="bi bi-arrow-left-right me-2 text-accent"></i>
+                    @(isAr ? "ربط الأعمدة" : "Field Mapping")
+                </h6>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-info btn-sm" id="btnFetchColumns">
+                        <i class="bi bi-cloud-download me-1"></i> @(isAr ? "جلب الأعمدة" : "Fetch Columns")
+                    </button>
+                    <button class="btn btn-accent btn-sm" id="btnAddMapping">
+                        <i class="bi bi-plus-lg me-1"></i> @(isAr ? "إضافة ربط" : "Add Mapping")
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table-glass w-100" id="mappingTable">
+                    <thead>
+                        <tr>
+                            <th style="width:40px">#</th>
+                            <th>@(isAr ? "عمود المصدر" : "Source Column")</th>
+                            <th>→</th>
+                            <th>@(isAr ? "خاصية AD" : "AD Attribute")</th>
+                            <th style="width:100px">@(isAr ? "مفتاح" : "Key")</th>
+                            <th style="width:60px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="mappingBody">
+                        @foreach (var m in Model.FieldMappings)
+                        {
+                            <tr class="mapping-row">
+                                <td class="row-num"></td>
+                                <td>
+                                    <input type="text" class="form-control form-control-sm bg-transparent mapping-source" value="@m.SourceColumn"
+                                           list="sourceColumnsList" />
+                                </td>
+                                <td class="text-center text-accent"><i class="bi bi-arrow-right"></i></td>
+                                <td>
+                                    <input type="text" class="form-control form-control-sm bg-transparent mapping-target" value="@m.TargetAttribute"
+                                           list="adAttributesList" />
+                                </td>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input mapping-key" @(m.IsKeyMapping ? "checked" : "") />
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-outline-danger btn-remove-mapping">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Common AD Attributes datalist -->
+            <datalist id="adAttributesList">
+                <option value="sAMAccountName"></option>
+                <option value="userPrincipalName"></option>
+                <option value="displayName"></option>
+                <option value="givenName"></option>
+                <option value="sn"></option>
+                <option value="mail"></option>
+                <option value="department"></option>
+                <option value="title"></option>
+                <option value="company"></option>
+                <option value="telephoneNumber"></option>
+                <option value="mobile"></option>
+                <option value="physicalDeliveryOfficeName"></option>
+                <option value="streetAddress"></option>
+                <option value="l"></option>
+                <option value="st"></option>
+                <option value="postalCode"></option>
+                <option value="co"></option>
+                <option value="employeeID"></option>
+                <option value="employeeNumber"></option>
+                <option value="description"></option>
+                <option value="info"></option>
+                <option value="extensionAttribute1"></option>
+                <option value="extensionAttribute2"></option>
+                <option value="extensionAttribute3"></option>
+                <option value="extensionAttribute4"></option>
+                <option value="extensionAttribute5"></option>
+                <option value="extensionAttribute6"></option>
+                <option value="extensionAttribute7"></option>
+                <option value="extensionAttribute8"></option>
+                <option value="extensionAttribute9"></option>
+                <option value="extensionAttribute10"></option>
+                <option value="extensionAttribute11"></option>
+                <option value="extensionAttribute12"></option>
+                <option value="extensionAttribute13"></option>
+                <option value="extensionAttribute14"></option>
+                <option value="extensionAttribute15"></option>
+            </datalist>
+            <datalist id="sourceColumnsList"></datalist>
+
+            <button class="btn btn-accent w-100 mt-3" id="btnSaveMappings">
+                <i class="bi bi-save me-1"></i> @(isAr ? "حفظ ربط الأعمدة" : "Save Mappings")
+            </button>
+            <div id="mappingSaveResult" class="mt-2"></div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/ldap-mode-hint.js"></script>
+<script>
+    // Live explanation of the chosen AD channel mode + port.
+    document.addEventListener('DOMContentLoaded', function () {
+        bindLdapModeHint({ mode: 'adSecurityMode', port: 'adPort', hint: 'adModeHint', rtl: @(isAr ? "true" : "false") });
+    });
+</script>
+
+<style>
+    .glass-tabs .nav-link {
+        color: var(--text-secondary);
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+        transition: all 0.3s;
+    }
+    .glass-tabs .nav-link.active {
+        color: white;
+        background: rgba(99,102,241,0.15);
+        border-color: var(--accent);
+    }
+    .day-btn.active-day {
+        background: var(--accent) !important;
+        border-color: var(--accent) !important;
+        color: white !important;
+    }
+    .mapping-row td { vertical-align: middle; }
+</style>
+<script>
+    // Schedule mode toggle
+    const scheduleMode = document.getElementById('scheduleMode');
+    function updateScheduleUI() {
+        const mode = scheduleMode.value;
+        document.getElementById('timeGroup').style.display = (mode === 'daily' || mode === 'weekly' || mode === 'monthly') ? '' : 'none';
+        document.getElementById('intervalGroup').style.display = mode === 'interval' ? '' : 'none';
+        document.getElementById('daysGroup').style.display = mode === 'weekly' ? '' : 'none';
+        document.getElementById('dayOfMonthGroup').style.display = mode === 'monthly' ? '' : 'none';
+        document.getElementById('customCronGroup').style.display = mode === 'custom' ? '' : 'none';
+    }
+    scheduleMode.addEventListener('change', updateScheduleUI);
+    updateScheduleUI();
+
+    // SMS toggle visibility (matching Create behavior)
+    const chkSmsEdit = document.getElementById('chkSmsEdit');
+    function toggleSmsEditFields() {
+        const show = chkSmsEdit.checked;
+        document.getElementById('phoneColGroupEdit').style.display = show ? '' : 'none';
+        document.getElementById('smsProviderGroupEdit').style.display = show ? '' : 'none';
+        document.getElementById('smsTemplateGroupEdit').style.display = show ? '' : 'none';
+    }
+    if (chkSmsEdit) {
+        chkSmsEdit.addEventListener('change', toggleSmsEditFields);
+        toggleSmsEditFields();
+    }
+
+    // Day checkboxes
+    document.querySelectorAll('.day-checkbox').forEach(cb => {
+        cb.addEventListener('change', function() {
+            this.closest('.day-btn').classList.toggle('active-day', this.checked);
+            const selected = [...document.querySelectorAll('.day-checkbox:checked')].map(c => c.value);
+            document.getElementById('scheduleDays').value = selected.join(',');
+        });
+    });
+
+    // Mapping: add row
+    let rowCounter = document.querySelectorAll('.mapping-row').length;
+    document.getElementById('btnAddMapping').addEventListener('click', () => {
+        rowCounter++;
+        const row = document.createElement('tr');
+        row.className = 'mapping-row';
+        row.innerHTML = `
+            <td class="row-num">${rowCounter}</td>
+            <td><input type="text" class="form-control form-control-sm bg-transparent mapping-source" list="sourceColumnsList" /></td>
+            <td class="text-center text-accent"><i class="bi bi-arrow-right"></i></td>
+            <td><input type="text" class="form-control form-control-sm bg-transparent mapping-target" list="adAttributesList" /></td>
+            <td class="text-center"><input type="checkbox" class="form-check-input mapping-key" /></td>
+            <td><button type="button" class="btn btn-sm btn-outline-danger btn-remove-mapping"><i class="bi bi-trash"></i></button></td>
+        `;
+        document.getElementById('mappingBody').appendChild(row);
+        updateRowNumbers();
+    });
+
+    // Mapping: remove row
+    document.getElementById('mappingBody').addEventListener('click', (e) => {
+        if (e.target.closest('.btn-remove-mapping')) {
+            e.target.closest('.mapping-row').remove();
+            updateRowNumbers();
+        }
+    });
+
+    function updateRowNumbers() {
+        document.querySelectorAll('.mapping-row .row-num').forEach((td, i) => td.textContent = i + 1);
+    }
+    updateRowNumbers();
+
+    // Fetch source columns
+    document.getElementById('btnFetchColumns').addEventListener('click', async () => {
+        const btn = document.getElementById('btnFetchColumns');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+        try {
+            const formData = new FormData();
+            formData.append('provider', document.getElementById('sourceProvider').value);
+            formData.append('host', document.getElementById('srcHost').value);
+            formData.append('port', document.getElementById('srcPort').value);
+            formData.append('database', document.getElementById('srcDatabase').value);
+            formData.append('username', document.getElementById('srcUsername').value);
+            formData.append('password', document.getElementById('srcPassword').value);
+            formData.append('integratedSecurity', document.getElementById('chkIntegrated').checked);
+            formData.append('tableOrView', document.getElementById('srcView').value);
+
+            const res = await fetch('@Url.Action("GetSourceColumns")', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (data.success) {
+                const dl = document.getElementById('sourceColumnsList');
+                dl.innerHTML = '';
+                data.columns.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    dl.appendChild(opt);
+                });
+                showToast(`@(isAr ? "تم جلب" : "Fetched") ${data.columns.length} @(isAr ? "عمود" : "columns")`, 'success');
+            } else {
+                showToast(data.message, 'error');
+            }
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i> @(isAr ? "جلب الأعمدة" : "Fetch Columns")';
+    });
+
+    // Save mappings
+    document.getElementById('btnSaveMappings').addEventListener('click', async () => {
+        const btn = document.getElementById('btnSaveMappings');
+        const resultDiv = document.getElementById('mappingSaveResult');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> @(isAr ? "جاري الحفظ..." : "Saving...")';
+
+        try {
+            const rows = document.querySelectorAll('.mapping-row');
+            const mappings = [];
+            rows.forEach(row => {
+                const src = row.querySelector('.mapping-source').value.trim();
+                const tgt = row.querySelector('.mapping-target').value.trim();
+                const isKey = row.querySelector('.mapping-key').checked;
+                if (src && tgt) mappings.push({ sourceColumn: src, targetAttribute: tgt, isKeyMapping: isKey });
+            });
+
+            const res = await fetch('@Url.Action("SaveMappings")' + '?serviceId=@Model.Id', {
+                method: 'POST',
+                body: JSON.stringify(mappings),
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!res.ok) {
+                resultDiv.innerHTML = `<div class="alert alert-danger py-2 fs-sm"><i class="bi bi-x-circle-fill me-1"></i> HTTP ${res.status}: ${res.statusText}</div>`;
+                return;
+            }
+
+            const data = await res.json();
+            resultDiv.innerHTML = data.success
+                ? `<div class="alert alert-success py-2 fs-sm"><i class="bi bi-check-circle-fill me-1"></i> ${data.message}</div>`
+                : `<div class="alert alert-danger py-2 fs-sm"><i class="bi bi-x-circle-fill me-1"></i> ${data.message}</div>`;
+        } catch (e) {
+            resultDiv.innerHTML = `<div class="alert alert-danger py-2 fs-sm"><i class="bi bi-x-circle-fill me-1"></i> Error: ${e.message}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-save me-1"></i> @(isAr ? "حفظ ربط الأعمدة" : "Save Mappings")';
+        }
+    });
+
+    // Run Now button (outside form to avoid nesting)
+    document.getElementById('btnRunNow')?.addEventListener('click', async () => {
+        const token = document.querySelector('[name=__RequestVerificationToken]').value;
+        const formData = new URLSearchParams();
+        formData.append('id', '@Model.Id');
+        formData.append('__RequestVerificationToken', token);
+        const res = await fetch('@Url.Action("RunNow")', { method: 'POST', body: formData, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+        if (res.redirected) { window.location.href = res.url; } else { window.location.href = '@Url.Action("Logs", new { id = Model.Id })'; }
+    });
+
+    // Test Source
+    document.getElementById('btnTestSrc')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btnTestSrc');
+        const resultDiv = document.getElementById('srcTestResult');
+        btn.disabled = true;
+        const formData = new FormData();
+        formData.append('provider', document.getElementById('sourceProvider').value);
+        formData.append('host', document.getElementById('srcHost').value);
+        formData.append('port', document.getElementById('srcPort').value);
+        formData.append('database', document.getElementById('srcDatabase').value);
+        formData.append('username', document.getElementById('srcUsername').value);
+        formData.append('password', document.getElementById('srcPassword').value);
+        formData.append('integratedSecurity', document.getElementById('chkIntegrated').checked);
+        const res = await fetch('@Url.Action("TestConnection")', { method: 'POST', body: formData });
+        const data = await res.json();
+        resultDiv.innerHTML = data.success
+            ? `<div class="alert alert-success py-2 fs-sm"><i class="bi bi-check-circle-fill me-1"></i> ${data.message}</div>`
+            : `<div class="alert alert-danger py-2 fs-sm"><i class="bi bi-x-circle-fill me-1"></i> ${data.message}</div>`;
+        btn.disabled = false;
+    });
+
+    // Orphan: show the quarantine OU only for the move action
+    function onOrphanActionChange() {
+        const a = document.getElementById('orphanAction');
+        const q = document.getElementById('quarantineOuGroup');
+        if (a && q) q.style.display = a.value === 'DisableAndMove' ? '' : 'none';
+    }
+    onOrphanActionChange();
+
+    // AD Audit: show only the config relevant to the chosen report type
+    function onReportTypeChange() {
+        const rt = document.getElementById('reportType');
+        if (!rt) return;
+        const isNhi = rt.value === 'NonHumanInventory';
+        // The inventory needs the groups field too, but for the opposite purpose: not what to
+        // list, but what counts as privileged among the accounts it finds.
+        const needsGroups = rt.value === 'PrivilegedGroups' || rt.value === 'AccessCertification' || isNhi;
+        const needsDup = rt.value === 'DuplicateAccounts';
+        const isPwd = rt.value === 'PasswordNeverExpires';
+        const g = document.getElementById('auditGroupsGroup');
+        const d = document.getElementById('duplicateAttrGroup');
+        const p = document.getElementById('pwdActionGroup');
+        const n = document.getElementById('nhiGroup');
+        const gh = document.getElementById('nhiGroupsHint');
+        if (g) g.style.display = needsGroups ? '' : 'none';
+        if (d) d.style.display = needsDup ? '' : 'none';
+        if (p) p.style.display = isPwd ? '' : 'none';
+        if (n) n.style.display = isNhi ? '' : 'none';
+        if (gh) gh.style.display = isNhi ? '' : 'none';
+        onPwdActionChange();
+        onNhiLifecycleChange();
+    }
+
+    // The lifecycle settings appear only once it is switched on, and the warning only once the mode
+    // chosen actually writes to the directory.
+    //
+    // Lives inside this view's ONE Scripts section. A second @@section with the same name compiles
+    // without a word and throws "Section 'Scripts' is already defined" the first time the page is
+    // rendered — which is how the settings screen was lost for a while.
+    function onNhiLifecycleChange() {
+        const on = document.getElementById('nhiLifecycle');
+        const fields = document.getElementById('nhiLifecycleFields');
+        const mode = document.getElementById('nhiQuarantineMode');
+        const warn = document.getElementById('nhiEnforceWarning');
+
+        const enabled = !!(on && on.checked);
+        if (fields) fields.style.display = enabled ? '' : 'none';
+        if (warn) warn.style.display = (enabled && mode && mode.value !== 'Report') ? '' : 'none';
+    }
+
+    // The removal warning and the exclusion field only appear once "Remove" is chosen.
+    function onPwdActionChange() {
+        const rt = document.getElementById('reportType');
+        const sel = document.getElementById('pwdNeverExpiresAction');
+        const warn = document.getElementById('pwdRemoveWarning');
+        const excl = document.getElementById('pwdExclusionGroup');
+        const removing = rt && sel && rt.value === 'PasswordNeverExpires' && sel.value === 'Remove';
+        if (warn) warn.style.display = removing ? '' : 'none';
+        if (excl) excl.style.display = removing ? '' : 'none';
+    }
+    onReportTypeChange();
+
+    // Load SMS providers
+    async function loadSmsProviders() {
+        try {
+            const res = await fetch('/SmsCenter/GetProviders');
+            const data = await res.json();
+            const sel = document.getElementById('smsProviderSelect');
+            if (!sel) return;
+            const currentId = '@(Model.SmsProviderId?.ToString() ?? "")';
+            data.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id; opt.textContent = p.name + (p.senderName ? ' (' + p.senderName + ')' : '');
+                if (p.id.toString() === currentId) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        } catch (e) { /* ignore */ }
+    }
+    loadSmsProviders();
+
+    // Test AD
+    document.getElementById('btnTestAd')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btnTestAd');
+        const resultDiv = document.getElementById('adTestResult');
+        btn.disabled = true;
+        const formData = new FormData();
+        formData.append('server', document.getElementById('adServer').value);
+        formData.append('port', document.getElementById('adPort').value);
+        formData.append('securityMode', document.getElementById('adSecurityMode').value);
+        formData.append('allowUntrustedCertificate', document.getElementById('chkAdUntrusted').checked);
+        formData.append('username', document.getElementById('adUsername').value);
+        formData.append('password', document.getElementById('adPassword').value);
+        formData.append('baseDN', document.getElementById('adBaseDN').value);
+        const res = await fetch('@Url.Action("TestAdConnection")', { method: 'POST', body: formData });
+        const data = await res.json();
+        resultDiv.innerHTML = data.success
+            ? `<div class="alert alert-success py-2 fs-sm"><i class="bi bi-check-circle-fill me-1"></i> ${data.message}</div>`
+            : `<div class="alert alert-danger py-2 fs-sm"><i class="bi bi-x-circle-fill me-1"></i> ${data.message}</div>`;
+        btn.disabled = false;
+    });
+</script>
+}

@@ -1,0 +1,54 @@
+@model IdentitySyncPro.Core.Models.Governance.GovAccessRequest
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+
+    // The decision and the execution are shown as two badges because they are two facts. Collapsing
+    // them into one would hide the case this module most needs visible: approved, and never reached
+    // Active Directory. A single "Approved" pill there would be a true statement covering a failure.
+    (string Badge, string Icon, string Label) Decision(string s) => s switch
+    {
+        "Pending"   => ("badge-warning",   "bi-hourglass-split",       isAr ? "بانتظار القرار" : "Pending"),
+        "Approved"  => ("badge-success",   "bi-check-circle-fill",     isAr ? "معتمَد" : "Approved"),
+        "Rejected"  => ("badge-danger",    "bi-x-circle-fill",         isAr ? "مرفوض" : "Rejected"),
+        "Cancelled" => ("badge-secondary", "bi-slash-circle",          isAr ? "مسحوب" : "Withdrawn"),
+        "Expired"   => ("badge-danger",    "bi-alarm-fill",            isAr ? "انتهت مهلته" : "Expired"),
+        _           => ("badge-secondary", "bi-dot",                   s)
+    };
+
+    var d = Decision(Model.Status);
+}
+
+<span class="badge @d.Badge"><i class="bi @d.Icon me-1"></i>@d.Label</span>
+
+@if (Model.Status == "Approved")
+{
+    @if (Model.ExecutionStatus == "Succeeded")
+    {
+        @if (Model.AccessRevokedUtc != null)
+        {
+            <span class="badge badge-secondary ms-1" title="@Model.AccessRevokedUtc?.ToString("yyyy-MM-dd HH:mm") UTC">
+                <i class="bi bi-clock-history me-1"></i>@(isAr ? "انتهت المدة وسُحب" : "Expired and revoked")
+            </span>
+        }
+        else if (Model.AccessExpiresUtc != null)
+        {
+            <span class="badge badge-info ms-1">
+                <i class="bi bi-hourglass me-1"></i>@(isAr ? "حتى" : "until") @Model.AccessExpiresUtc?.ToString("yyyy-MM-dd")
+            </span>
+        }
+    }
+    else if (Model.ExecutionStatus == "Failed")
+    {
+        @* The one badge that must never be quiet: a manager granted this, the system recorded the
+           grant, and the person does not have it. *@
+        <span class="badge badge-danger ms-1" title="@Model.ExecutionError">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>@(isAr ? "لم يُنفَّذ في AD" : "Not applied in AD")
+        </span>
+    }
+    else
+    {
+        <span class="badge badge-warning ms-1">
+            <i class="bi bi-arrow-repeat me-1"></i>@(isAr ? "قيد التنفيذ" : "Applying")
+        </span>
+    }
+}

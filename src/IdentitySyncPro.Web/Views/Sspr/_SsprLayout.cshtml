@@ -1,0 +1,179 @@
+@{
+    var isAr = (ViewBag.SsprLang as string ?? "ar") == "ar";
+    var dir = isAr ? "rtl" : "ltr";
+}
+<!DOCTYPE html>
+<html lang="@(isAr ? "ar" : "en")" dir="@dir" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(isAr ? "إعادة تعيين كلمة المرور" : "Password Reset")</title>
+    <link href="~/lib/fonts/fonts.css" rel="stylesheet" />
+    @if (isAr)
+    {
+        <link href="~/lib/bootstrap-5.3.3/css/bootstrap.rtl.min.css" rel="stylesheet">
+    }
+    else
+    {
+        <link href="~/lib/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    }
+    <link href="~/lib/bootstrap-icons-1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body {
+            @* Unquoted on purpose: Razor HTML-encodes an apostrophe to &#x27;, and CSS inside a
+               <style> block does not decode HTML entities — so "'Cairo'" arrived as an invalid
+               declaration and was dropped, silently falling back to the system font. Both names
+               are valid CSS identifiers, so no quoting is needed. *@
+            font-family: @(isAr ? "Cairo" : "Inter"), sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at top, #1e1b4b 0%, #0f0f23 55%, #09090f 100%);
+        }
+        .sspr-card {
+            width: 100%;
+            max-width: 440px;
+            padding: 36px 36px 32px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(18px);
+            box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+        }
+        /* Organization logo slot — drop a file at wwwroot/images/sspr-logo.png to show it */
+        .org-logo { max-height: 72px; max-width: 200px; margin: 0 auto 16px; display: block; }
+        .brand-icon {
+            width: 56px; height: 56px; border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #10b981, #14b8a6);
+            font-size: 26px; color: #fff;
+            margin: 0 auto 14px;
+        }
+        .form-control {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 12px 14px;
+        }
+        .form-control:focus { background: rgba(255,255,255,0.07); border-color: #10b981; box-shadow: none; }
+        .btn-sspr { background: linear-gradient(135deg, #10b981, #14b8a6); border: none; padding: 12px; font-weight: 700; color: #fff; }
+        .btn-sspr:hover { filter: brightness(1.1); color: #fff; }
+        .lang-switch { position: absolute; top: 18px; @(isAr ? "left" : "right"): 22px; }
+        .lang-switch a { color: rgba(255,255,255,0.55); font-size: 0.8rem; text-decoration: none; padding: 2px 8px; border-radius: 8px; }
+        .lang-switch a.active { color: #fff; background: rgba(255,255,255,0.1); font-weight: 700; }
+        /* Professional inline validation (replaces the browser's native bubbles) */
+        .form-control.is-invalid { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.15); }
+        .field-error { color: #f87171; font-size: 0.78rem; margin-top: 5px; display: flex; align-items: center; gap: 5px; }
+    </style>
+</head>
+<body>
+    @* Absolute to the portal start so the toggle works on POST-rendered steps too *@
+    <div class="lang-switch">
+        <a href="@Url.Action("Index", "Sspr")?lang=ar" class="@(isAr ? "active" : "")">عربي</a>
+        <a href="@Url.Action("Index", "Sspr")?lang=en" class="@(!isAr ? "active" : "")">EN</a>
+    </div>
+
+    <div class="sspr-card">
+        @* Organization logo — shows wwwroot/images/sspr-logo.png if present, else the default icon *@
+        <img src="~/images/sspr-logo.png" alt="logo" class="org-logo" id="orgLogo"
+             style="display:none"
+             onload="this.style.display='block'; var i=document.getElementById('brandIcon'); if(i) i.style.display='none';"
+             onerror="this.remove();" />
+
+        @RenderBody()
+    </div>
+
+    <script>
+        // ✅ Professional, language-aware validation — replaces native browser bubbles.
+        (function () {
+            var isAr = @(isAr ? "true" : "false");
+            var L = isAr ? {
+                required: 'هذا الحقل مطلوب',
+                minlength: 'يجب ألا يقل عن {n} أحرف',
+                digits: 'أرقام فقط',
+                invalid: 'قيمة غير صحيحة'
+            } : {
+                required: 'This field is required',
+                minlength: 'Must be at least {n} characters',
+                digits: 'Digits only',
+                invalid: 'Invalid value'
+            };
+
+            function clearError(inp) {
+                inp.classList.remove('is-invalid');
+                var next = inp.parentElement.querySelector('.field-error');
+                if (next) next.remove();
+            }
+            function showError(inp, msg) {
+                inp.classList.add('is-invalid');
+                if (inp.parentElement.querySelector('.field-error')) return;
+                var div = document.createElement('div');
+                div.className = 'field-error';
+                div.innerHTML = '<i class="bi bi-exclamation-circle"></i><span>' + msg + '</span>';
+                inp.insertAdjacentElement('afterend', div);
+            }
+            function messageFor(inp) {
+                var v = inp.validity;
+                if (v.valueMissing) return L.required;
+                if (v.tooShort) return L.minlength.replace('{n}', inp.minLength);
+                if (v.patternMismatch) return inp.dataset.errmsg || L.digits;
+                return inp.dataset.errmsg || L.invalid;
+            }
+
+            var mismatchMsg = isAr ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match';
+
+            // Countdown bar for the OTP validity window
+            var cd = document.getElementById('ssprCountdown');
+            if (cd) {
+                var expires = parseInt(cd.dataset.expires, 10);
+                var total = parseInt(cd.dataset.total, 10) || 300000;
+                var bar = cd.querySelector('.cd-bar');
+                var txt = cd.querySelector('.cd-text');
+                var remLabel = cd.dataset.remaining;
+                var expLabel = cd.dataset.expired;
+                var submitBtn = document.getElementById('ssprSubmit');
+                var timer = setInterval(function () {
+                    var rem = expires - Date.now();
+                    if (rem <= 0) {
+                        bar.style.width = '0%';
+                        txt.textContent = expLabel;
+                        if (submitBtn) submitBtn.disabled = true;
+                        clearInterval(timer);
+                        return;
+                    }
+                    var pct = Math.max(0, Math.min(100, rem / total * 100));
+                    bar.style.width = pct + '%';
+                    bar.style.background = rem < 60000 ? '#ef4444' : 'linear-gradient(90deg,#10b981,#14b8a6)';
+                    var s = Math.floor(rem / 1000), m = Math.floor(s / 60), ss = s % 60;
+                    txt.textContent = remLabel + ' ' + m + ':' + (ss < 10 ? '0' : '') + ss;
+                }, 250);
+            }
+
+            document.querySelectorAll('.sspr-card form').forEach(function (form) {
+                form.setAttribute('novalidate', '');
+                form.addEventListener('submit', function (e) {
+                    var firstInvalid = null;
+                    form.querySelectorAll('input').forEach(function (inp) {
+                        clearError(inp);
+                        if (!inp.checkValidity()) {
+                            showError(inp, messageFor(inp));
+                            if (!firstInvalid) firstInvalid = inp;
+                        }
+                    });
+                    // Confirm-password match (only when both are present and individually valid)
+                    var pw = form.querySelector('[name=newPassword]');
+                    var cpw = form.querySelector('[name=confirmPassword]');
+                    if (!firstInvalid && pw && cpw && pw.value !== cpw.value) {
+                        showError(cpw, mismatchMsg);
+                        firstInvalid = cpw;
+                    }
+                    if (firstInvalid) { e.preventDefault(); firstInvalid.focus(); }
+                });
+                form.querySelectorAll('input').forEach(function (inp) {
+                    inp.addEventListener('input', function () { clearError(inp); });
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

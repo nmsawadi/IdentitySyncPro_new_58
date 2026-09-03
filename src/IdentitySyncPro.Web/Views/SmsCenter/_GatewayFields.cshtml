@@ -1,0 +1,86 @@
+@model IdentitySyncPro.Core.Models.Settings.SmsProvider
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    string Sel(string field, string val) => Model != null && string.Equals(field, val, StringComparison.OrdinalIgnoreCase) ? "selected" : "";
+    var method = string.IsNullOrWhiteSpace(Model?.HttpMethod) ? "POST" : Model!.HttpMethod;
+    var format = string.IsNullOrWhiteSpace(Model?.BodyFormat) ? "Json" : Model!.BodyFormat;
+}
+
+<div class="col-12"><hr class="opacity-10"><h6 class="fw-700 mb-0"><i class="bi bi-sliders me-2 text-accent"></i>@(isAr ? "شكل طلب المزود (قياسي — يعمل مع أي مزود)" : "Provider request shape (standard — works with any gateway)")</h6></div>
+
+<!-- Preset picker -->
+<div class="col-md-6">
+    <label class="form-label fw-600">@(isAr ? "قالب جاهز (نقطة انطلاق)" : "Preset (starting point)")</label>
+    <div class="input-group">
+        <select id="smsPreset" class="form-select bg-transparent">
+            <option value="">@(isAr ? "— اختر مزوداً لتعبئة القالب —" : "— pick a provider to fill the template —")</option>
+            <option value="legacy">Adapter / Legacy (fixed JSON)</option>
+            <option value="genericJson">Generic JSON</option>
+            <option value="msegat">Msegat</option>
+            <option value="taqnyat">Taqnyat</option>
+            <option value="unifonic">Unifonic</option>
+            <option value="mobily">Mobily.ws</option>
+            <option value="fourJawaly">4Jawaly</option>
+        </select>
+        <button class="btn btn-glass" type="button" onclick="applySmsPreset(document.getElementById('smsPreset').value)">
+            <i class="bi bi-magic me-1"></i>@(isAr ? "تعبئة" : "Fill")
+        </button>
+    </div>
+    <small class="text-warning d-block mt-1"><i class="bi bi-exclamation-triangle me-1"></i>@(isAr ? "قالب مبدئي — تحقّق من أسماء الحقول والرابط وعلامة النجاح مع وثائق مزودك (قد تتغيّر)." : "Starter only — verify field names, URL and success token against your provider's current docs (they change).")</small>
+</div>
+
+<div class="col-md-3">
+    <label class="form-label fw-600">@(isAr ? "طريقة الطلب" : "HTTP Method")</label>
+    <select name="HttpMethod" id="HttpMethod" class="form-select bg-transparent">
+        <option value="POST" selected="@(Sel(method, "POST") == "selected")">POST</option>
+        <option value="GET" selected="@(Sel(method, "GET") == "selected")">GET</option>
+    </select>
+</div>
+
+<div class="col-md-3">
+    <label class="form-label fw-600">@(isAr ? "صيغة الجسم" : "Body format")</label>
+    <select name="BodyFormat" id="BodyFormat" class="form-select bg-transparent" onchange="onSmsBodyFormatChange()">
+        <option value="Json" selected="@(Sel(format, "Json") == "selected")">JSON body</option>
+        <option value="Form" selected="@(Sel(format, "Form") == "selected")">Form (x-www-form-urlencoded)</option>
+        <option value="Query" selected="@(Sel(format, "Query") == "selected")">Query string (GET)</option>
+    </select>
+</div>
+
+<div class="col-md-6">
+    <label class="form-label fw-600">@(isAr ? "مفتاح API / التوكن" : "API Key / Token")</label>
+    <div class="input-group">
+        <input type="password" name="ApiKey" value="" autocomplete="new-password" class="form-control bg-transparent" id="apiKey"
+               placeholder="@(isAr ? "للمزودين الذين يستخدمون Bearer/مفتاح — فارغ = إبقاء الحالي" : "for Bearer/key providers — blank = keep current")">
+        <button class="btn btn-glass" type="button" onclick="toggleField('apiKey','apiKeyIcon')"><i class="bi bi-eye" id="apiKeyIcon"></i></button>
+    </div>
+    <small class="text-muted">@(isAr ? "يُستعمل عبر العنصر النائب {apikey}" : "used via the {apikey} placeholder")</small>
+</div>
+
+<div class="col-md-6">
+    <label class="form-label fw-600">@(isAr ? "علامة نجاح في الرد (اختياري)" : "Success token in response (optional)")</label>
+    <input type="text" name="SuccessBodyContains" id="SuccessBodyContains" value="@Model?.SuccessBodyContains" class="form-control bg-transparent"
+           placeholder='@(isAr ? "مثال: 1701 أو \"success\":true" : "e.g. 1701 or \"success\":true")'>
+    <small class="text-muted">@(isAr ? "نجاح = HTTP 2xx وتضمّن الرد هذا النص. فارغ = يكفي 2xx." : "Success = HTTP 2xx AND response contains this. Empty = 2xx is enough.")</small>
+</div>
+
+<div class="col-12">
+    <label class="form-label fw-600">@(isAr ? "قالب الطلب (الجسم أو الاستعلام)" : "Request template (body or query)")</label>
+    <textarea name="RequestTemplate" id="RequestTemplate" class="form-control bg-transparent font-monospace" rows="3"
+              placeholder='{"userName":"{username}","numbers":"{recipient}","msg":"{message}"}'>@Model?.RequestTemplate</textarea>
+    <small class="text-muted">@(isAr ? "فارغ = يُرسل قالب JSON الافتراضي القديم (توافق رجعي). العناصر النائبة:" : "Empty = sends the legacy default JSON payload (backward compatible). Placeholders:")
+        <code>{username}</code> <code>{password}</code> <code>{apikey}</code> <code>{sender}</code> <code>{recipient}</code> <code>{message}</code> <code>{message_ucs2}</code>
+    </small>
+    <small class="d-block text-warning mt-1">
+        <i class="bi bi-info-circle me-1"></i>
+        @(isAr
+            ? "استخدم {message_ucs2} بدل {message} فقط مع البوابات التي تُعلن الترميز بنوع رسالة (مثل type=2 في RML) — فهي تتوقّع النص بصيغة UCS-2 ست-عشرية، وترميز UTF-8 المعتاد يصلها مشوّهاً بالعربية."
+            : "Use {message_ucs2} instead of {message} only on gateways that flag encoding with a message type (e.g. RML's type=2) — they expect UCS-2 hex, and ordinary UTF-8 arrives corrupted for Arabic.")
+    </small>
+</div>
+
+<div class="col-12">
+    <label class="form-label fw-600">@(isAr ? "ترويسات إضافية (JSON اختياري)" : "Extra headers (optional JSON)")</label>
+    <input type="text" name="HeadersJson" id="HeadersJson" value="@Model?.HeadersJson" class="form-control bg-transparent font-monospace"
+           placeholder='{"Authorization":"Bearer {apikey}"}'>
+    <small class="text-muted">@(isAr ? "كائن JSON من الترويسات، يقبل العناصر النائبة." : "JSON object of headers; placeholders allowed.")</small>
+</div>

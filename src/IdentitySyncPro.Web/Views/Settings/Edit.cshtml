@@ -1,0 +1,753 @@
+﻿@model IdentitySyncPro.Core.Models.Settings.TenantSettings
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = Model.Id == 0
+        ? (isAr ? "إضافة جهة جديدة" : "Add New Tenant")
+        : (isAr ? $"تعديل: {Model.TenantName}" : $"Edit: {Model.TenantName}");
+}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="@Url.Action("Index", "Settings")" class="btn btn-glass btn-sm"><i class="bi bi-arrow-left"></i></a>
+    <div>
+        <h5 class="fw-600 mb-0">@ViewData["Title"]</h5>
+        <span class="fs-sm text-muted">@(isAr ? "أدخل إعدادات الاتصال بالدومين وقاعدة البيانات" : "Enter domain and database connection settings")</span>
+    </div>
+</div>
+
+<form id="tenantForm" onsubmit="return saveTenant(event)">
+    <input type="hidden" name="Id" value="@Model.Id" />
+
+    <!-- Tenant Info -->
+    <div class="glass-card settings-section mb-4">
+        <div class="section-header">
+            <div class="section-icon" style="background:rgba(99,102,241,0.15);color:var(--accent-primary)"><i class="bi bi-building"></i></div>
+            <div>
+                <h6 class="fw-600 mb-0">@(isAr ? "معلومات الجهة" : "Tenant Information")</h6>
+                <span class="fs-xs text-muted">@(isAr ? "اسم ووصف الجهة" : "Name and description")</span>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "اسم الجهة *" : "Tenant Name *")</label>
+                    <input type="text" name="TenantName" value="@Model.TenantName" class="form-control" required placeholder="@(isAr ? "مثال: اسم الجهة - المستخدمون" : "e.g., Organization Name - Users")" />
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "الوصف" : "Description")</label>
+                    <input type="text" name="Description" value="@Model.Description" class="form-control" placeholder="@(isAr ? "وصف اختياري" : "Optional")" />
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="settings-form-group">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="IsActive" value="true" @(Model.IsActive ? "checked" : "") id="chkActive" />
+                        <label class="form-check-label fs-sm" for="chkActive">@(isAr ? "نشط (تفعيل المزامنة)" : "Active (Enable Sync)")</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Target selection -->
+    <div class="glass-card settings-section mb-4">
+        <div class="section-header">
+            <div class="section-icon" style="background:rgba(16,185,129,0.15);color:#10b981"><i class="bi bi-bullseye"></i></div>
+            <div>
+                <h6 class="fw-600 mb-0">@(isAr ? "الهدف" : "Target")</h6>
+                <span class="fs-xs text-muted">@(isAr ? "أي دليل تُزوَّد إليه هذه الجهة" : "Which directory this tenant provisions into")</span>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "نوع الهدف" : "Target type")</label>
+                    @{ var target = IdentitySyncPro.Core.Models.Settings.TargetProviders.Normalise(Model.TargetProvider); }
+                    <select name="TargetProvider" id="targetProvider" class="form-control" onchange="onTargetChange()">
+                        <option value="ActiveDirectory" selected="@(target == "ActiveDirectory")">Active Directory</option>
+                        <option value="Scim" selected="@(target == "Scim")">@(isAr ? "خدمة SCIM 2.0" : "SCIM 2.0 service")</option>
+                    </select>
+                    <span class="fs-xs text-muted">
+                        @(isAr ? "الجهات المضبوطة قبل وجود هذا الحقل تبقى على Active Directory."
+                               : "Tenants configured before this field existed stay on Active Directory.")
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        @* Stated where the choice is made, because it is the difference an operator has to plan
+           around: SCIM has no organisational units, so the OU rules on this tenant have nothing to
+           act on and are refused rather than silently skipped. *@
+        <div class="alert alert-warning py-2 px-3 fs-xs mt-2" id="scimCaveat" style="display:none">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            @(isAr
+                ? "SCIM لا يعرف الوحدات التنظيمية (OUs): قواعد الـ OU على هذه الجهة لن تُنفَّذ وسيُرفض النقل صراحةً في السجل. وأسماء السمات في شاشة ربط الحقول تصبح مسارات SCIM — مثل name.givenName و emails[0].value — لا أسماء سمات AD."
+                : "SCIM has no organisational units: the OU rules on this tenant cannot run, and a move is refused explicitly in the log. Attribute names in the field-mapping screen become SCIM paths — name.givenName, emails[0].value — not AD attribute names.")
+        </div>
+
+        <div class="row g-3 mt-1" id="scimFields" style="display:none">
+            <div class="col-md-6">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "رابط خدمة SCIM" : "SCIM service URL")</label>
+                    <input type="text" name="ScimBaseUrl" value="@Model.ScimBaseUrl" class="form-control"
+                           dir="ltr" placeholder="https://idp.example.edu/scim/v2" />
+                    <span class="fs-xs text-muted">@(isAr ? "جذر الخدمة بلا /Users" : "The service root, without /Users")</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "رمز Bearer" : "Bearer token")</label>
+                    <input type="password" name="ScimBearerToken" class="form-control" dir="ltr"
+                           placeholder="@(isAr ? "اتركه فارغاً للإبقاء على الحالي" : "leave blank to keep the current one")" />
+                    <span class="fs-xs text-muted">@(isAr ? "مشفَّر at-rest كسائر الأسرار" : "Encrypted at rest, like every other secret here")</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "مهلة الطلب (ثوانٍ)" : "Request timeout (seconds)")</label>
+                    <input type="number" name="ScimTimeoutSeconds" value="@(Model.ScimTimeoutSeconds <= 0 ? 30 : Model.ScimTimeoutSeconds)"
+                           class="form-control" min="5" max="300" />
+                    @* Not decoration. An unbounded wait on a socket once stopped every background
+                       job this system had, and nothing reported it. *@
+                    <span class="fs-xs text-muted">
+                        @(isAr ? "بين 5 و300. لا يُترك بلا حدّ — انتظار غير محدود على مقبس يوقف الأتمتة كلها بصمت."
+                               : "Between 5 and 300. Never unbounded — an open-ended socket wait stops the whole pipeline silently.")
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="settings-form-group">
+                    <label class="d-block">&nbsp;</label>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="ScimAllowUntrustedCertificate"
+                               value="true" id="scimCert" checked="@Model.ScimAllowUntrustedCertificate" />
+                        <input type="hidden" name="ScimAllowUntrustedCertificate" value="false" />
+                        <label class="form-check-label" for="scimCert">
+                            @(isAr ? "قبول شهادة من مرجع داخلي أو موقّعة ذاتياً" : "Accept an internal-CA or self-signed certificate")
+                        </label>
+                    </div>
+                    <span class="fs-xs text-muted">@(isAr ? "لخدمة SCIM داخل شبكة معزولة" : "For a SCIM service inside an isolated network")</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Directory Settings -->
+    <div class="glass-card settings-section mb-4" id="adSection">
+        <div class="section-header">
+            <div class="section-icon" style="background:rgba(99,102,241,0.15);color:var(--accent-primary)"><i class="bi bi-diagram-3-fill"></i></div>
+            <div>
+                <h6 class="fw-600 mb-0">@(isAr ? "إعدادات Active Directory" : "Active Directory Settings")</h6>
+                <span class="fs-xs text-muted">@(isAr ? "إعدادات الاتصال بالدومين" : "Domain connection settings")</span>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6"><div class="settings-form-group"><label>@(isAr ? "عنوان السيرفر *" : "Server *")</label><input type="text" name="ADServer" value="@Model.ADServer" class="form-control" required placeholder="dc.example.local" /></div></div>
+            <div class="col-md-3"><div class="settings-form-group"><label>@(isAr ? "المنفذ" : "Port")</label><input type="number" name="ADPort" value="@Model.ADPort" class="form-control" id="adPort" /></div></div>
+            @{
+                // Rows saved before the mode existed fall back to the legacy SSL switch.
+                var adModeVal = Model.ADSecurityModeSet ? (int)Model.ADSecurityMode : (Model.ADUseSsl ? 2 : 1);
+            }
+            <div class="col-md-3">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "تشفير القناة" : "Channel security")</label>
+                    <select name="ADSecurityMode" id="adSecurityMode" class="form-control">
+                        <option value="0" selected="@(adModeVal == 0)">@(isAr ? "تلقائي (حسب المنفذ)" : "Auto (by port)")</option>
+                        <option value="1" selected="@(adModeVal == 1)">@(isAr ? "sign & seal — 389، بلا شهادة" : "Sign & seal — 389, no certificate")</option>
+                        <option value="2" selected="@(adModeVal == 2)">@(isAr ? "LDAPS — 636، يتطلب شهادة" : "LDAPS — 636, needs certificate")</option>
+                        <option value="3" selected="@(adModeVal == 3)">@(isAr ? "StartTLS — 389، يتطلب شهادة" : "StartTLS — 389, needs certificate")</option>
+                        <option value="4" selected="@(adModeVal == 4)">@(isAr ? "بلا تشفير — الإنشاء سيفشل" : "No encryption — creation will fail")</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-12">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="ADAllowUntrustedCertificate" value="true" @(Model.ADAllowUntrustedCertificate ? "checked" : "") id="chkAdUntrusted" />
+                    <label class="form-check-label fs-sm" for="chkAdUntrusted">@(isAr ? "قبول شهادة غير موثوقة (CA داخلي / self-signed)" : "Accept untrusted certificate (internal CA / self-signed)")</label>
+                </div>
+                <div id="adModeHint" class="alert alert-secondary py-1 px-2 mb-0 mt-2 fs-xs"></div>
+            </div>
+            <div class="col-md-12"><div class="settings-form-group"><label>Base DN *</label><input type="text" name="ADBaseDN" value="@Model.ADBaseDN" class="form-control" required placeholder="DC=example,DC=local" /></div></div>
+            <div class="col-md-4"><div class="settings-form-group"><label>@(isAr ? "اسم المستخدم" : "Username")</label><input type="text" name="ADUsername" value="@Model.ADUsername" class="form-control" /></div></div>
+            <div class="col-md-4"><div class="settings-form-group"><label>@(isAr ? "كلمة المرور" : "Password")</label><input type="password" name="ADPassword" value="" autocomplete="new-password" class="form-control" placeholder="@(isAr ? "اتركه فارغاً للإبقاء على الحالية" : "Leave blank to keep current")" /></div></div>
+            <div class="col-md-4"><div class="settings-form-group"><label>@(isAr ? "كلمة المرور الافتراضية" : "Default Password")</label><input type="password" name="ADDefaultPassword" value="" autocomplete="new-password" class="form-control" placeholder="@(isAr ? "اتركه فارغاً للإبقاء على الحالية" : "Leave blank to keep current")" /></div></div>
+        </div>
+    </div>
+
+    <!--
+        Account Identity — how an account is NAMED and how it is FOUND again.
+        Both are per-organisation policy: one names accounts after an identity number, another
+        after the person. Leaving both fields empty preserves the original behaviour exactly.
+    -->
+    <div class="glass-card settings-section mb-4">
+        <div class="section-header">
+            <div class="section-icon" style="background:rgba(139,92,246,0.15);color:#a78bfa"><i class="bi bi-person-badge-fill"></i></div>
+            <div>
+                <h6 class="fw-600 mb-0">@(isAr ? "هوية الحساب — التسمية والمطابقة" : "Account Identity — Naming &amp; Matching")</h6>
+                <span class="fs-xs text-muted">@(isAr ? "سياسة شكل اسم المستخدم، والسمة التي يُطابق بها الحساب مع المصدر" : "Username policy, and the attribute used to match the account back to the source")</span>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <!-- ═══ Provisioning policy ═══ -->
+            <div class="col-12">
+                <label class="fs-sm fw-600">@(isAr ? "إنشاء الحسابات" : "Account Creation")</label>
+                <div class="fs-xs text-muted mb-2">
+                    @(isAr
+                        ? "ماذا يفعل النظام حين يجد هوية في المصدر بلا حساب في AD. الجهة التي تُدار حساباتها من نظام آخر تختار «لا تُنشئ» — فتُطبَّق قواعد الربط ودورة الحياة على الحسابات القائمة فقط."
+                        : "What happens when a source identity has no AD account. A tenant whose accounts are created by another system chooses \"Never\" — mapping and lifecycle rules then apply to existing accounts only.")
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "سياسة الإنشاء" : "Creation Policy")</label>
+                    @{
+                        var creationMode = string.IsNullOrWhiteSpace(Model.AccountCreationMode) ? "Always" : Model.AccountCreationMode;
+                    }
+                    <select name="AccountCreationMode" id="accountCreationMode" class="form-control" onchange="toggleCreationCondition()">
+                        <option value="Always" selected="@(creationMode == "Always")">@(isAr ? "أنشئ دائماً (الافتراضي)" : "Always create (default)")</option>
+                        <option value="Never" selected="@(creationMode == "Never")">@(isAr ? "لا تُنشئ إطلاقاً" : "Never create")</option>
+                        <option value="Conditional" selected="@(creationMode == "Conditional")">@(isAr ? "بشرط" : "Conditional")</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div id="creationModeHint" class="alert alert-secondary py-2 px-3 mb-0 fs-xs"></div>
+            </div>
+
+            <div class="col-12 creation-condition d-none">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="settings-form-group">
+                            <label>@(isAr ? "عمود الشرط" : "Condition Column")</label>
+                            <input type="text" name="AccountCreationConditionField" value="@Model.AccountCreationConditionField" class="form-control" placeholder="EMP_STATUS" />
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="settings-form-group">
+                            <label>@(isAr ? "العامل" : "Operator")</label>
+                            @{ var creationOp = Model.AccountCreationConditionOperator; }
+                            <select name="AccountCreationConditionOperator" class="form-control">
+                                <option value="">—</option>
+                                <option value="==" selected="@(creationOp == "==")">==</option>
+                                <option value="!=" selected="@(creationOp == "!=")">!=</option>
+                                <option value="in" selected="@(creationOp == "in")">in</option>
+                                <option value="not_in" selected="@(creationOp == "not_in")">not_in</option>
+                                <option value="gt" selected="@(creationOp == "gt")">gt</option>
+                                <option value="lt" selected="@(creationOp == "lt")">lt</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="settings-form-group">
+                            <label>@(isAr ? "القيمة" : "Value")</label>
+                            <input type="text" name="AccountCreationConditionValue" value="@Model.AccountCreationConditionValue" class="form-control" placeholder="1" />
+                            <div class="fs-xs text-muted mt-1">@(isAr ? "لـ in / not_in: قيم مفصولة بفواصل — مثل 1,2,3" : "For in / not_in: comma-separated — e.g. 1,2,3")</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-warning py-2 px-3 mb-0 mt-2 fs-xs">
+                    <i class="bi bi-shield-exclamation me-1"></i>
+                    @(isAr
+                        ? "الشرط غير المكتمل (عمود أو عامل أو قيمة ناقصة) يعني: لا يُنشأ أي حساب — لا العكس. وكذلك عمود غير موجود في المصدر."
+                        : "An incomplete condition (missing column, operator, or value) means no account is created — not the opposite. The same applies to a column the source does not return.")
+                </div>
+            </div>
+
+            <div class="col-12"><hr style="border-color:rgba(255,255,255,0.06);margin:4px 0"></div>
+
+            <!-- ═══ Matching ═══ -->
+            <div class="col-12">
+                <label class="fs-sm fw-600">@(isAr ? "مفتاح المطابقة" : "Match Key")</label>
+                <div class="fs-xs text-muted mb-2">
+                    @(isAr
+                        ? "اتركه فارغاً إذا كان اسم المستخدم مشتقاً من قيمة ثابتة (رقم الهوية مثلاً) — تُطابَق الحسابات بـ sAMAccountName كما كان. املأه إذا كان اسم المستخدم مشتقاً من اسم الشخص، لأن الاسم قد يتغيّر فلا يُعتمد مفتاحاً."
+                        : "Leave empty when the account name comes from a stable value (an identity number) — accounts match by sAMAccountName as before. Fill it in when the name is derived from a person's name, since a name can change and cannot serve as a key.")
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "سمة المطابقة في AD" : "AD Match Attribute")</label>
+                    <input type="text" name="ADMatchAttribute" value="@Model.ADMatchAttribute" class="form-control" placeholder="extensionAttribute2" />
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "السمة التي تحمل المفتاح الثابت" : "Attribute holding the stable key")</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "عمود المصدر المُطابق" : "Match Source Column")</label>
+                    <input type="text" name="ADMatchSourceColumn" value="@Model.ADMatchSourceColumn" class="form-control" placeholder="@(isAr ? "فارغ = عمود المعرّف" : "empty = key column")" />
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "قيمته تُبصَم في السمة أعلاه عند الإنشاء" : "Its value is stamped into the attribute above on create")</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="alert alert-info py-2 px-3 mb-0 fs-xs">
+                    <i class="bi bi-info-circle me-1"></i>
+                    @(isAr
+                        ? "الحسابات الموجودة مسبقاً بلا قيمة في هذه السمة لن تُطابَق وسيُنشأ لها حساب جديد — تأكّد من بصم القيمة قبل أول تشغيلة."
+                        : "Existing accounts with no value in this attribute will not match and a new account will be created — stamp the value before the first run.")
+                </div>
+            </div>
+
+            <!-- ═══ Username policy ═══ -->
+            <div class="col-12">
+                <hr style="border-color:rgba(255,255,255,0.06);margin:4px 0">
+                <label class="fs-sm fw-600">@(isAr ? "سياسة اسم المستخدم" : "Username Policy")</label>
+                <div class="fs-xs text-muted mb-2">
+                    @(isAr
+                        ? "تُضبط في شاشة ربط الحقول: على قاعدة المعرّف اختر تحويل Username: بالقالب المناسب. الأزرار أدناه تنسخ القالب لك."
+                        : "Configured in Attribute Mapping: on the identifier rule pick the Username: transform with the right pattern. The buttons below copy a pattern for you.")
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-2" id="usernamePresets">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyUsernamePattern(this)"
+                            data-pattern="Username:{FIRST_NAME:1}{SECOND_NAME:1}{LAST_NAME}">
+                        m + a + alhareth <span class="text-muted">→ maalhareth</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyUsernamePattern(this)"
+                            data-pattern="Username:{FIRST_NAME}.{LAST_NAME}">
+                        first.last <span class="text-muted">→ mohammed.alhareth</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyUsernamePattern(this)"
+                            data-pattern="Username:{FIRST_NAME:1}{LAST_NAME}">
+                        m + alhareth <span class="text-muted">→ malhareth</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyUsernamePattern(this)"
+                            data-pattern="Username:{LAST_NAME}{FIRST_NAME:1}">
+                        last + m <span class="text-muted">→ alharethm</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyUsernamePattern(this)"
+                            data-pattern="Username:{FIRST_NAME}_{EMP_NO}">
+                        first_number <span class="text-muted">→ mohammed_4471</span>
+                    </button>
+                </div>
+                <div class="fs-xs text-muted">
+                    @(isAr
+                        ? "استبدل أسماء الأعمدة بأعمدة الـ View لديك. {COL} = العمود كاملاً · {COL:N} = أول N حرفاً · الخيارات: |lower (افتراضي) |upper |max:N. الحدّ الأقصى 20 حرفاً (حدّ AD)."
+                        : "Replace the column names with your own view's columns. {COL} = whole column · {COL:N} = first N characters · options: |lower (default) |upper |max:N. Capped at 20 characters (the AD limit).")
+                </div>
+            </div>
+
+            <!-- ═══ Collisions ═══ -->
+            <div class="col-12">
+                <hr style="border-color:rgba(255,255,255,0.06);margin:4px 0">
+                <label class="fs-sm fw-600">@(isAr ? "تكرار اسم المستخدم" : "Name Collisions")</label>
+                <div class="fs-xs text-muted mb-2">
+                    @(isAr
+                        ? "شخصان بنفس الاسم يولّدان نفس القيمة، فيُضاف رقم مميّز للحساب الجديد. الأساس يُقصّ تلقائياً ليبقى الناتج داخل حدّ الـ20 حرفاً."
+                        : "Two people with the same name generate the same value, so a discriminator is appended to the new account. The base is truncated automatically to stay within the 20-character limit.")
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "صيغة التمييز" : "Discriminator Format")</label>
+                    <input type="text" name="UsernameCollisionFormat" value="@Model.UsernameCollisionFormat" class="form-control" placeholder="{base}{n}" />
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "{base} = الاسم · {n} = الرقم · فارغ = {base}{n}" : "{base} = the name · {n} = the number · empty = {base}{n}")</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "أول رقم يُجرَّب" : "First Number Tried")</label>
+                    <input type="number" name="UsernameCollisionStart" value="@Model.UsernameCollisionStart" class="form-control" min="1" max="999" />
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "الافتراضي 2 — أي maalhareth2" : "Default 2 — i.e. maalhareth2")</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "أقصى عدد محاولات" : "Max Attempts")</label>
+                    <input type="number" name="UsernameCollisionMaxAttempts" value="@Model.UsernameCollisionMaxAttempts" class="form-control" min="1" max="200" />
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "بعدها يُرفض السجل بخطأ واضح" : "After which the record fails with a clear error")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Source Settings (Generic) -->
+    <div class="glass-card settings-section mb-4">
+        <div class="section-header">
+            <div class="section-icon" style="background:rgba(245,158,11,0.15);color:var(--warning)"><i class="bi bi-database-fill"></i></div>
+            <div>
+                <h6 class="fw-600 mb-0">@(isAr ? "مصدر البيانات" : "Data Source")</h6>
+                <span class="fs-xs text-muted">@(isAr ? "قاعدة البيانات المصدر (Oracle, SQL Server, إلخ)" : "Source database (Oracle, SQL Server, etc.)")</span>
+            </div>
+        </div>
+        <div class="row g-3">
+            <!-- Source Provider Selector -->
+            <div class="col-12">
+                <label class="fs-sm fw-600 mb-2">@(isAr ? "نوع قاعدة البيانات" : "Database Provider")</label>
+                <div class="db-provider-selector" id="srcProviderSelector">
+                    <button type="button" class="db-provider-btn @(Model.SourceProvider == "Oracle" ? "active" : "")" data-provider="Oracle" data-port="1521" onclick="selectSrcProvider(this)">
+                        <i class="bi bi-database"></i><span>Oracle</span>
+                    </button>
+                    <button type="button" class="db-provider-btn @(Model.SourceProvider == "SqlServer" ? "active" : "")" data-provider="SqlServer" data-port="1433" onclick="selectSrcProvider(this)">
+                        <i class="bi bi-microsoft"></i><span>SQL Server</span>
+                    </button>
+                    <button type="button" class="db-provider-btn @(Model.SourceProvider == "PostgreSQL" ? "active" : "")" data-provider="PostgreSQL" data-port="5432" onclick="selectSrcProvider(this)">
+                        <i class="bi bi-box"></i><span>PostgreSQL</span>
+                    </button>
+                    <button type="button" class="db-provider-btn @(Model.SourceProvider == "MySQL" ? "active" : "")" data-provider="MySQL" data-port="3306" onclick="selectSrcProvider(this)">
+                        <i class="bi bi-disc"></i><span>MySQL</span>
+                    </button>
+                </div>
+                <input type="hidden" name="SourceProvider" id="srcProvider" value="@Model.SourceProvider" />
+            </div>
+            <div class="col-md-5"><div class="settings-form-group"><label>@(isAr ? "عنوان السيرفر (Host) *" : "Host *")</label><input type="text" name="SourceHost" value="@Model.SourceHost" class="form-control" required placeholder="db-server.domain.com" /></div></div>
+            <div class="col-md-3"><div class="settings-form-group"><label>@(isAr ? "المنفذ (Port)" : "Port")</label><input type="number" name="SourcePort" id="srcPort" value="@Model.SourcePort" class="form-control" /></div></div>
+            <div class="col-md-4"><div class="settings-form-group"><label id="srcDbLabel">@(Model.SourceProvider == "Oracle" ? (isAr ? "اسم الخدمة (Service Name) *" : "Service Name *") : (isAr ? "اسم قاعدة البيانات *" : "Database Name *"))</label><input type="text" name="SourceDatabase" value="@Model.SourceDatabase" class="form-control" required placeholder="@(Model.SourceProvider == "Oracle" ? "ORCL" : "IdentityDB")" /></div></div>
+            <div class="col-md-4"><div class="settings-form-group"><label>@(isAr ? "اسم المستخدم *" : "Username *")</label><input type="text" name="SourceUsername" value="@Model.SourceUsername" class="form-control" required /></div></div>
+            <div class="col-md-4"><div class="settings-form-group"><label>@(isAr ? "كلمة المرور" : "Password")</label><input type="password" name="SourcePassword" value="" autocomplete="new-password" class="form-control" placeholder="@(isAr ? "اتركه فارغاً للإبقاء على الحالية" : "Leave blank to keep current")" /></div></div>
+            @* SQL Server only. Oracle, PostgreSQL and MySQL take their own credentials, and a
+               switch that silently did nothing on three of four providers would be worse than absent. *@
+            <div class="col-md-4"><div class="settings-form-group">
+                <label>@(isAr ? "مصادقة ويندوز للمصدر" : "Windows authentication for the source")</label>
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input" type="checkbox" name="SourceIntegratedSecurity" value="true" id="srcIntegrated" @(Model.SourceIntegratedSecurity ? "checked" : "") />
+                    <input type="hidden" name="SourceIntegratedSecurity" value="false" />
+                    <label class="form-check-label" for="srcIntegrated">@(isAr ? "الاتصال بحساب الخدمة بدل كلمة مرور مخزّنة (SQL Server فقط)" : "Connect as the service account instead of a stored password (SQL Server only)")</label>
+                </div>
+            </div></div>
+            <div class="col-md-4"><div class="settings-form-group"><label>@(isAr ? "الجدول / View *" : "Table / View *")</label><input type="text" name="SourceTableOrView" value="@Model.SourceTableOrView" class="form-control" required placeholder="V_IDENTITY_DATA" /></div></div>
+            <div class="col-md-3"><div class="settings-form-group"><label>@(isAr ? "مهلة الأمر (ثانية)" : "Timeout (sec)")</label><input type="number" name="SourceCommandTimeout" value="@Model.SourceCommandTimeout" class="form-control" /></div></div>
+
+            <!-- Dynamic source schema: column names as they appear in YOUR view — nothing is hardcoded -->
+            <div class="col-12">
+                <hr style="border-color:rgba(255,255,255,0.06);margin:4px 0">
+                <label class="fs-sm fw-600">@(isAr ? "أعمدة المصدر (بأسمائها الفعلية في الـ View)" : "Source Columns (by their real names in the view)")</label>
+                <div class="fs-xs text-muted mb-2">@(isAr ? "تُقرأ كل الأعمدة تلقائياً — حدد فقط عمود المعرّف وعمود الحالة، والباقي عبر شاشة ربط الحقول" : "All columns are read automatically — only the key and status columns are required; everything else is configured in Attribute Mapping")</div>
+            </div>
+            <div class="col-md-3"><div class="settings-form-group"><label>@(isAr ? "عمود المعرّف (رقمي) *" : "Key Column (numeric) *")</label><input type="text" name="SourceKeyColumn" value="@Model.SourceKeyColumn" class="form-control" placeholder="IDENTITY_ID" /></div></div>
+            <div class="col-md-3"><div class="settings-form-group"><label>@(isAr ? "عمود رمز الحالة (رقمي)" : "Status Code Column (numeric)")</label><input type="text" name="SourceStatusColumn" value="@Model.SourceStatusColumn" class="form-control" placeholder="STATUSE_CODE" /></div></div>
+            <div class="col-md-2"><div class="settings-form-group"><label>@(isAr ? "عمود وصف الحالة" : "Status Desc Column")</label><input type="text" name="SourceStatusDescColumn" value="@Model.SourceStatusDescColumn" class="form-control" placeholder="STATUS_DESC" /></div></div>
+            <div class="col-md-2"><div class="settings-form-group"><label>@(isAr ? "عمود الجوال (للرسائل)" : "Phone Column (SMS)")</label><input type="text" name="SourcePhoneColumn" value="@Model.SourcePhoneColumn" class="form-control" placeholder="MOBILE_PHONE" /></div></div>
+            <div class="col-md-2"><div class="settings-form-group"><label>@(isAr ? "عمود الاسم (للرسائل)" : "Name Column (SMS)")</label><input type="text" name="SourceDisplayNameColumn" value="@Model.SourceDisplayNameColumn" class="form-control" placeholder="FULL_NAME" /></div></div>
+            <!-- Connection String Preview -->
+            <div class="col-12">
+                <div class="settings-form-group">
+                    <label class="d-flex align-items-center gap-2 cursor-pointer" onclick="document.getElementById('srcConnPreview').classList.toggle('d-none')">
+                        <i class="bi bi-eye"></i> @(isAr ? "معاينة Connection String" : "Preview Connection String")
+                    </label>
+                    <textarea id="srcConnPreview" class="form-control d-none" rows="2" readonly style="opacity:0.6;font-size:0.8rem">@Model.SourceConnectionString</textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @*
+        The "Application Database" section was removed here (2026-07-25).
+
+        It presented the system's own database as a per-tenant setting, but nothing ever read
+        those fields: every DbContext and Hangfire storage is built from
+        ConnectionStrings:DefaultConnection in appsettings.json at startup. The fields were only
+        ever populated by parsing that same connection string for display.
+
+        Editing them therefore appeared to repoint the application database and did nothing at
+        all — the most expensive kind of control to leave in a settings screen. The system
+        database is a deployment concern, not tenant configuration.
+    *@
+
+    <!-- Sync Schedule Settings -->
+    <div class="glass-card settings-section mb-4">
+        <div class="section-header">
+            <div class="section-icon" style="background:rgba(16,185,129,0.15);color:var(--success)"><i class="bi bi-clock-history"></i></div>
+            <div>
+                <h6 class="fw-600 mb-0">@(isAr ? "جدولة المزامنة" : "Sync Scheduling")</h6>
+                <span class="fs-xs text-muted">@(isAr ? "حدد أوقات المزامنة التلقائية بشكل مبسط" : "Set sync times in a user-friendly way")</span>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-4"><div class="settings-form-group"><label>@(isAr ? "حجم الدفعة" : "Batch Size")</label><input type="number" name="DefaultBatchSize" value="@Model.DefaultBatchSize" class="form-control" /></div></div>
+            <div class="col-md-4"><div class="settings-form-group"><div class="form-check form-switch mt-4"><input class="form-check-input" type="checkbox" name="EnableAutoSync" value="true" @(Model.EnableAutoSync ? "checked" : "") id="chkAutoSync" /><label class="form-check-label fs-sm" for="chkAutoSync">@(isAr ? "تفعيل المزامنة التلقائية" : "Enable Auto Sync")</label></div></div></div>
+            <div class="col-md-8"><div class="settings-form-group"><div class="form-check form-switch mt-4"><input class="form-check-input" type="checkbox" name="EnableLifecycleDuringSync" value="true" @(Model.EnableLifecycleDuringSync ? "checked" : "") id="chkLifecycleSync" /><label class="form-check-label fs-sm" for="chkLifecycleSync">@(isAr ? "تفعيل دورة الحياة أثناء المزامنة" : "Enable Lifecycle During Sync")</label></div><span class="fs-xs text-muted mt-1 d-block">@(isAr ? "عند التفعيل، يتم تحديث الميتافيرز وتطبيق قواعد دورة الحياة تلقائياً أثناء المزامنة الكاملة بدون جلب البيانات مرتين" : "When enabled, Metaverse is updated and lifecycle rules are applied during Full Sync without fetching data twice")</span></div></div>
+        </div>
+
+        <!-- Full Sync -->
+        <div class="schedule-block mt-4">
+            <h6 class="fw-600 fs-sm mb-2"><i class="bi bi-arrow-repeat me-1 text-success"></i> @(isAr ? "المزامنة الكاملة" : "Full Sync")</h6>
+            @await Html.PartialAsync("_ScheduleEditor", new ViewDataDictionary(ViewData) {
+                { "Prefix", "FullSync" }, { "Mode", Model.FullSyncMode }, { "Time", Model.FullSyncTime ?? "02:00" },
+                { "Days", Model.FullSyncDays ?? "" }, { "Interval", Model.FullSyncIntervalMinutes ?? 60 },
+                { "Cron", Model.FullSyncSchedule }, { "IsAr", isAr }
+            })
+        </div>
+
+        <!-- Delta Sync -->
+        <div class="schedule-block mt-4">
+            <h6 class="fw-600 fs-sm mb-2"><i class="bi bi-lightning me-1 text-warning"></i> @(isAr ? "مزامنة التغييرات" : "Delta Sync")</h6>
+            @await Html.PartialAsync("_ScheduleEditor", new ViewDataDictionary(ViewData) {
+                { "Prefix", "DeltaSync" }, { "Mode", Model.DeltaSyncMode }, { "Time", Model.DeltaSyncTime ?? "" },
+                { "Days", Model.DeltaSyncDays ?? "" }, { "Interval", Model.DeltaSyncIntervalMinutes ?? 30 },
+                { "Cron", Model.DeltaSyncSchedule }, { "IsAr", isAr }
+            })
+        </div>
+
+        <!-- Health Check -->
+        <div class="schedule-block mt-4">
+            <h6 class="fw-600 fs-sm mb-2"><i class="bi bi-heart-pulse me-1 text-info"></i> @(isAr ? "فحص الاتصال" : "Health Check")</h6>
+            @await Html.PartialAsync("_ScheduleEditor", new ViewDataDictionary(ViewData) {
+                { "Prefix", "HealthCheck" }, { "Mode", Model.HealthCheckMode }, { "Time", Model.HealthCheckTime ?? "" },
+                { "Days", "" }, { "Interval", Model.HealthCheckIntervalMinutes ?? 10 },
+                { "Cron", Model.HealthCheckSchedule }, { "IsAr", isAr }
+            })
+        </div>
+    </div>
+
+    <!-- SMS Notification Settings -->
+    <div class="glass-card settings-section mb-4">
+        <div class="section-header">
+            <div class="section-icon" style="background:rgba(168,85,247,0.15);color:#a855f7"><i class="bi bi-chat-dots-fill"></i></div>
+            <div>
+                <h6 class="fw-600 mb-0">@(isAr ? "إشعارات SMS" : "SMS Notifications")</h6>
+                <span class="fs-xs text-muted">@(isAr ? "إرسال بيانات الدخول للحسابات الجديدة عبر رسالة نصية" : "Send login credentials for new accounts via SMS")</span>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-12">
+                <div class="settings-form-group">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="EnableSmsNotification" value="true" @(Model.EnableSmsNotification ? "checked" : "") id="chkSms" />
+                        <label class="form-check-label fs-sm" for="chkSms">@(isAr ? "تفعيل إرسال SMS" : "Enable SMS")</label>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "مزود SMS" : "SMS Provider")</label>
+                    <select name="SmsProviderId" class="form-select" id="smsProviderSelect">
+                        <option value="">@(isAr ? "-- اختر مزوداً من مركز الإشعارات --" : "-- Select from Notifications Center --")</option>
+                    </select>
+                    <span class="fs-xs text-muted mt-1 d-block">
+                        @(isAr ? "أضف مزودي رسائل من" : "Add providers from ")
+                        <a href="@Url.Action("Index", "SmsCenter")" target="_blank">@(isAr ? "مركز الإشعارات" : "Notifications Center")</a>
+                    </span>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "قالب الرسالة" : "Message Template")</label>
+                    <textarea name="SmsMessageTemplate" class="form-control" rows="3" placeholder="@(isAr ? "مرحباً {DISPLAY_NAME}، تم إنشاء حسابك.\nاسم المستخدم: {USERNAME}\nكلمة المرور: {PASSWORD}" : "Hello {DISPLAY_NAME}, your account has been created.\nUsername: {USERNAME}\nPassword: {PASSWORD}")">@Model.SmsMessageTemplate</textarea>
+                    <span class="fs-xs text-muted mt-1 d-block">@(isAr ? "المتغيرات: {DISPLAY_NAME}, {USERNAME}, {PASSWORD}, {IDENTITY_ID}" : "Variables: {DISPLAY_NAME}, {USERNAME}, {PASSWORD}, {IDENTITY_ID}")</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Default Value for Empty Fields -->
+    <div class="glass-card settings-section mb-4">
+        <div class="section-header">
+            <div class="section-icon" style="background:rgba(239,68,68,0.15);color:var(--danger)"><i class="bi bi-exclamation-circle-fill"></i></div>
+            <div>
+                <h6 class="fw-600 mb-0">@(isAr ? "القيمة الافتراضية للحقول الفارغة" : "Global Default Value for Empty Fields")</h6>
+                <span class="fs-xs text-muted">@(isAr ? "إذا كان حقل معين فارغ، استخدم هذه القيمة بدلاً من إيقاف المزامنة" : "If a required field is empty, use this value instead of failing the sync")</span>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-12">
+                <div class="settings-form-group">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="UseGlobalDefaultForEmptyFields" value="true" @(Model.UseGlobalDefaultForEmptyFields ? "checked" : "") id="chkGlobalDefault" />
+                        <label class="form-check-label fs-sm" for="chkGlobalDefault">@(isAr ? "تفعيل القيمة الافتراضية العالمية" : "Enable Global Default Value")</label>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="settings-form-group">
+                    <label>@(isAr ? "قيمة فارغة:" : "Empty Field Value:")</label>
+                    <input type="text" name="GlobalDefaultValue" value="@Model.GlobalDefaultValue" class="form-control" placeholder="., -, N/A, UNKNOWN" dir="ltr" />
+                    <span class="fs-xs text-muted mt-1 d-block">@(isAr ? "مثل: . أو - أو N/A — تُستخدم لأي حقل فارغ" : "e.g.: . or - or N/A — used for any empty field")</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="d-flex gap-3">
+        <button type="submit" class="btn btn-glow" id="btnSave"><i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ الإعدادات" : "Save Settings")</button>
+        <a href="@Url.Action("Index", "Settings")" class="btn btn-glass"><i class="bi bi-x-lg me-1"></i> @(isAr ? "إلغاء" : "Cancel")</a>
+    </div>
+</form>
+
+@section Scripts {
+<script>
+    // Show only the target that is actually selected. The AD block stays in the DOM and keeps
+    // posting its values, so switching to SCIM and back does not erase a domain connection
+    // somebody spent an afternoon getting right.
+    //
+    // Lives in the view's ONE Scripts section: a second @@section with the same name compiles
+    // cleanly and throws "Section 'Scripts' is already defined" the moment the page is rendered.
+    function onTargetChange() {
+        var select = document.getElementById('targetProvider');
+        if (!select) return;
+
+        var isScim = select.value === 'Scim';
+        var scim = document.getElementById('scimFields');
+        var caveat = document.getElementById('scimCaveat');
+        var ad = document.getElementById('adSection');
+
+        if (scim) scim.style.display = isScim ? '' : 'none';
+        if (caveat) caveat.style.display = isScim ? '' : 'none';
+        if (ad) ad.style.display = isScim ? 'none' : '';
+    }
+    document.addEventListener('DOMContentLoaded', onTargetChange);
+</script>
+<script src="~/js/ldap-mode-hint.js"></script>
+<script>
+    // Live explanation of the chosen AD channel mode + port.
+    document.addEventListener('DOMContentLoaded', function () {
+        bindLdapModeHint({ mode: 'adSecurityMode', port: 'adPort', hint: 'adModeHint', rtl: @(isAr ? "true" : "false") });
+    });
+    // Creation policy: show the condition row only when it applies, and state the consequence
+    // of the chosen mode in words — "Never" is the one setting that silently changes how many
+    // accounts a run produces.
+    function toggleCreationCondition() {
+        const mode = document.getElementById('accountCreationMode').value;
+        const isAr = currentLang === 'ar';
+        document.querySelectorAll('.creation-condition').forEach(
+            el => el.classList.toggle('d-none', mode !== 'Conditional'));
+
+        const hint = document.getElementById('creationModeHint');
+        if (!hint) return;
+
+        if (mode === 'Never') {
+            hint.className = 'alert alert-warning py-2 px-3 mb-0 fs-xs';
+            hint.innerHTML = isAr
+                ? '<i class="bi bi-exclamation-triangle me-1"></i> لن يُنشأ أي حساب. الهويات بلا حساب تُسجَّل «تخطٍّ» مع السبب، ويظهر مجموعها في نهاية كل تشغيلة. الحسابات القائمة تُحدَّث وتُنقل كالمعتاد.'
+                : '<i class="bi bi-exclamation-triangle me-1"></i> No account will be created. Identities without one are logged as Skipped with the reason, and the run reports the total. Existing accounts are still updated and moved.';
+        } else if (mode === 'Conditional') {
+            hint.className = 'alert alert-info py-2 px-3 mb-0 fs-xs';
+            hint.innerHTML = isAr
+                ? '<i class="bi bi-funnel me-1"></i> يُنشأ الحساب فقط للهويات التي يتحقّق فيها الشرط أدناه — مثل «الموظفون النشطون فقط».'
+                : '<i class="bi bi-funnel me-1"></i> An account is created only for identities matching the condition below — e.g. "active employees only".';
+        } else {
+            hint.className = 'alert alert-secondary py-2 px-3 mb-0 fs-xs';
+            hint.innerHTML = isAr
+                ? '<i class="bi bi-info-circle me-1"></i> كل هوية في المصدر بلا حساب في AD سيُنشأ لها حساب. هذا سلوك النظام الأصلي.'
+                : '<i class="bi bi-info-circle me-1"></i> Every source identity without an AD account gets one. This is the original behaviour.';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', toggleCreationCondition);
+
+    // Copies a username pattern so it can be pasted into the identifier rule's Transform
+    // field on the Attribute Mapping screen (the pattern is not stored on this screen).
+    function copyUsernamePattern(btn) {
+        const pattern = btn.dataset.pattern;
+        const done = () => {
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check2"></i> ' + (currentLang === 'ar' ? 'نُسخ' : 'Copied');
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-outline-secondary');
+            setTimeout(() => {
+                btn.innerHTML = original;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-secondary');
+            }, 1500);
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(pattern).then(done).catch(() => window.prompt(
+                currentLang === 'ar' ? 'انسخ القالب:' : 'Copy the pattern:', pattern));
+        } else {
+            // Plain HTTP is a supported deployment here, where the clipboard API is unavailable.
+            window.prompt(currentLang === 'ar' ? 'انسخ القالب:' : 'Copy the pattern:', pattern);
+        }
+    }
+
+    // Source provider selector
+    function selectSrcProvider(btn) {
+        document.querySelectorAll('#srcProviderSelector .db-provider-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('srcProvider').value = btn.dataset.provider;
+        document.getElementById('srcPort').value = btn.dataset.port;
+        const lbl = document.getElementById('srcDbLabel');
+        if (lbl) lbl.textContent = btn.dataset.provider === 'Oracle'
+            ? (currentLang==='ar' ? 'اسم الخدمة (Service Name) *' : 'Service Name *')
+            : (currentLang==='ar' ? 'اسم قاعدة البيانات *' : 'Database Name *');
+    }
+
+    // selectProvider / toggleDbAuth / updateConnStrPreview were removed with the Application
+    // Database section (2026-07-25) — they drove only its inputs.
+
+    // Schedule mode selector
+    function selectScheduleMode(prefix, mode) {
+        document.querySelectorAll(`[data-schedule-prefix="${prefix}"] .sched-mode-btn`).forEach(b => b.classList.remove('active'));
+        document.querySelector(`[data-schedule-prefix="${prefix}"] .sched-mode-btn[data-mode="${mode}"]`).classList.add('active');
+        document.getElementById(prefix + 'Mode').value = mode;
+        document.getElementById(prefix + '_interval_panel').style.display = mode === 'interval' ? '' : 'none';
+        document.getElementById(prefix + '_daily_panel').style.display = mode === 'daily' ? '' : 'none';
+        document.getElementById(prefix + '_weekly_panel').style.display = mode === 'weekly' ? '' : 'none';
+        updateCronPreview(prefix);
+    }
+
+    function updateCronPreview(prefix) {
+        const mode = document.getElementById(prefix + 'Mode').value;
+        let cron = '', desc = '';
+        if (mode === 'interval') {
+            const mins = parseInt(document.getElementById(prefix + 'IntervalMinutes')?.value || '30');
+            if (mins >= 60 && mins % 60 === 0) { cron = `0 */${mins/60} * * *`; desc = currentLang==='ar' ? `كل ${mins/60} ساعة` : `Every ${mins/60} hours`; }
+            else { cron = `*/${mins} * * * *`; desc = currentLang==='ar' ? `كل ${mins} دقيقة` : `Every ${mins} minutes`; }
+        } else if (mode === 'daily') {
+            const t = document.getElementById(prefix + 'Time')?.value || '02:00';
+            const [h,m] = t.split(':'); cron = `${parseInt(m)} ${parseInt(h)} * * *`; desc = currentLang==='ar' ? `يومياً ${t}` : `Daily at ${t}`;
+        } else if (mode === 'weekly') {
+            const t = document.getElementById(prefix + 'Time')?.value || '02:00';
+            const [h,m] = t.split(':');
+            const days = []; document.querySelectorAll(`#${prefix}_weekly_panel .day-btn.active`).forEach(b => days.push(b.dataset.day));
+            const d = days.join(',') || '0,1,2,3,4,5,6'; cron = `${parseInt(m)} ${parseInt(h)} * * ${d}`;
+            document.getElementById(prefix + 'Days').value = d; desc = currentLang==='ar' ? `أسبوعياً ${t}` : `Weekly at ${t}`;
+        }
+        document.getElementById(prefix + 'Schedule').value = cron;
+        const el = document.getElementById(prefix + '_cron_desc'); if (el) el.textContent = desc;
+    }
+
+    function toggleDay(btn, prefix) { btn.classList.toggle('active'); updateCronPreview(prefix); }
+
+    // Load SMS providers
+    async function loadSmsProviders() {
+        try {
+            const res = await fetch('/SmsCenter/GetProviders');
+            const data = await res.json();
+            const sel = document.getElementById('smsProviderSelect');
+            if (!sel) return;
+            const currentId = '@(Model.SmsProviderId?.ToString() ?? "")';
+            data.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id; opt.textContent = p.name + (p.senderName ? ' (' + p.senderName + ')' : '');
+                if (p.id.toString() === currentId) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    // Init on load
+    document.addEventListener('DOMContentLoaded', () => {
+        ['FullSync','DeltaSync','HealthCheck'].forEach(p => { const m = document.getElementById(p+'Mode'); if(m) selectScheduleMode(p, m.value); });
+        loadSmsProviders();
+    });
+
+    // Save
+    async function saveTenant(e) {
+        e.preventDefault();
+        const form = document.getElementById('tenantForm');
+        const btn = document.getElementById('btnSave');
+        const formData = new FormData(form);
+        if (!formData.has('IsActive')) formData.append('IsActive', 'false');
+        if (!formData.has('ADAllowUntrustedCertificate')) formData.append('ADAllowUntrustedCertificate', 'false');
+        if (!formData.has('EnableAutoSync')) formData.append('EnableAutoSync', 'false');
+        if (!formData.has('EnableLifecycleDuringSync')) formData.append('EnableLifecycleDuringSync', 'false');
+        if (!formData.has('EnableSmsNotification')) formData.append('EnableSmsNotification', 'false');
+        if (!formData.has('UseGlobalDefaultForEmptyFields')) formData.append('UseGlobalDefaultForEmptyFields', 'false');
+        if (!formData.has('DbIntegratedSecurity')) formData.append('DbIntegratedSecurity', 'false');
+        if (!formData.has('DbTrustServerCertificate')) formData.append('DbTrustServerCertificate', 'false');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> ' + (currentLang==='ar' ? 'جاري الحفظ...' : 'Saving...');
+        try {
+            const res = await fetch('/Settings/Save', { method: 'POST', body: new URLSearchParams(formData) });
+            const data = await res.json();
+            if (data.success) { showToast(currentLang==='ar' ? 'تم حفظ الإعدادات بنجاح' : 'Settings saved', 'success'); setTimeout(() => window.location.href = '/Settings', 1500); }
+            else { showToast(data.message, 'error'); }
+        } catch (e) { showToast(currentLang==='ar' ? 'فشل الحفظ' : 'Save failed', 'error'); }
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> ' + (currentLang==='ar' ? 'حفظ الإعدادات' : 'Save Settings');
+        return false;
+    }
+</script>
+}
+

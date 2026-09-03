@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/IdentitySyncPro.Web", "--urls", "http://localhost:5021"],
+      "port": 5021
+    }
+  ]
+}

@@ -1,0 +1,426 @@
+@model IdentitySyncPro.Core.Models.Settings.TenantSettings
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? $"ربط الحقول: {Model.TenantName}" : $"Mapping: {Model.TenantName}";
+    var adAttributes = new[] { "sAMAccountName","givenName","sn","initials","displayName","mail","userPrincipalName","telephoneNumber","mobile","department","title","company","description","physicalDeliveryOfficeName","streetAddress","l","st","postalCode","co","employeeID","employeeNumber","employeeType","mailNickname","proxyAddresses","targetAddress","info","extensionAttribute1","extensionAttribute2","extensionAttribute3","extensionAttribute4","extensionAttribute5","extensionAttribute6","extensionAttribute7","extensionAttribute8","extensionAttribute9","extensionAttribute10","extensionAttribute11","extensionAttribute12","extensionAttribute13","extensionAttribute14","extensionAttribute15" };
+}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="@Url.Action("Index", "Settings")" class="btn btn-glass btn-sm"><i class="bi bi-arrow-left"></i></a>
+    <div>
+        <h5 class="fw-600 mb-0">@ViewData["Title"]</h5>
+        <span class="fs-sm text-muted">@(isAr ? "ربط أعمدة قاعدة البيانات بخصائص Active Directory وإدارة المجموعات وقواعد الـ OU" : "Map DB columns to AD attributes, manage groups and OU rules")</span>
+    </div>
+    <div class="ms-auto d-flex gap-2">
+        <span class="badge-status badge-warning">@Model.SourceProvider</span>
+        <span class="fs-xs text-muted">@Model.SourceHost → @Model.ADServer</span>
+    </div>
+</div>
+
+<!-- ═══ Section 0: Export / Import ═══ -->
+<div class="glass-card mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+            <h6 class="fw-600 mb-1"><i class="bi bi-arrow-down-up me-2 text-accent"></i>@(isAr ? "نقل الإعدادات" : "Transfer Settings")</h6>
+            <span class="fs-sm text-muted">
+                @(isAr
+                    ? "تصدير القواعد إلى Excel أو استيرادها — للنقل بين البيئات. لا يشمل بيانات الاتصال ولا كلمات المرور."
+                    : "Export the rules to Excel or import them — for moving between environments. Connection settings and passwords are not included.")
+            </span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="@Url.Action("ExportSettings", "Settings", new { tenantId = Model.Id })" class="btn btn-glass btn-sm">
+                <i class="bi bi-file-earmark-excel me-1"></i>@(isAr ? "تصدير" : "Export")
+            </a>
+            <input type="file" id="importFile" accept=".xlsx" style="display:none" onchange="previewImport()">
+            <button class="btn btn-glass btn-sm" onclick="document.getElementById('importFile').click()">
+                <i class="bi bi-upload me-1"></i>@(isAr ? "استيراد من Excel" : "Import from Excel")
+            </button>
+        </div>
+    </div>
+
+    <div id="importResult" class="mt-3" style="display:none"></div>
+</div>
+
+<!-- ═══ Section 1: Attribute Mapping ═══ -->
+<div class="glass-card settings-section mb-4">
+    <div class="section-header">
+        <div class="section-icon" style="background:rgba(99,102,241,0.15);color:var(--accent-primary)"><i class="bi bi-arrow-left-right"></i></div>
+        <div>
+            <h6 class="fw-600 mb-0">@(isAr ? "ربط الحقول" : "Attribute Mapping")</h6>
+            <span class="fs-xs text-muted">@(isAr ? "ربط أعمدة قاعدة البيانات بخصائص الدومين" : "Map source DB columns to AD attributes")</span>
+        </div>
+        <div class="ms-auto d-flex gap-2">
+            <button class="btn btn-glow btn-sm" onclick="loadDefaultMappings()" title="@(isAr ? "يحذف الربط الحالي ويضع الربط الافتراضي الكامل" : "Replaces current mappings with all default mappings")"><i class="bi bi-magic me-1"></i> @(isAr ? "تحميل الربط الافتراضي" : "Load Defaults")</button>
+            <button class="btn btn-glass btn-sm" onclick="fetchColumns()"><i class="bi bi-cloud-download me-1"></i> @(isAr ? "جلب الأعمدة" : "Fetch Columns")</button>
+            <button class="btn btn-glass btn-sm" onclick="addMappingRow()"><i class="bi bi-plus-lg me-1"></i> @(isAr ? "إضافة" : "Add")</button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table-glass w-100" id="mappingTable">
+            <thead><tr>
+                <th style="width:25%">@(isAr ? "عمود المصدر (DB)" : "Source Column (DB)")</th>
+                <th style="width:25%">@(isAr ? "خاصية AD" : "AD Attribute")</th>
+                <th style="width:20%">@(isAr ? "تحويل (Transform)" : "Transform")</th>
+                <th style="width:10%">@(isAr ? "مطلوب" : "Required")</th>
+                <th style="width:10%">@(isAr ? "معرّف" : "ID")</th>
+                <th style="width:10%"></th>
+            </tr></thead>
+            <tbody id="mappingBody">
+                @foreach (var m in Model.AttributeMappings)
+                {
+                    <tr>
+                        <td><input type="text" class="form-control form-control-sm src-col" value="@m.SourceColumn" list="srcColumnsList" /></td>
+                        <td><input type="text" class="form-control form-control-sm ad-attr" value="@m.TargetAttribute" list="adAttrList" placeholder="AD attribute" /></td>
+                        <td><input type="text" class="form-control form-control-sm transform" value="@m.Transform" list="transformList" placeholder="Format:{0}@@example.com" /></td>
+                        <td class="text-center"><input type="checkbox" class="form-check-input is-req" @(m.IsRequired ? "checked" : "") /></td>
+                        <td class="text-center"><input type="checkbox" class="form-check-input is-id" @(m.IsIdentifier ? "checked" : "") /></td>
+                        <td class="text-center"><button class="btn btn-danger-glass btn-sm" onclick="this.closest('tr').remove()"><i class="bi bi-trash3"></i></button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <datalist id="srcColumnsList"></datalist>
+    <datalist id="adAttrList">
+        @foreach (var a in adAttributes) { <option value="@a">@a</option> }
+    </datalist>
+    @*
+        Every transform the engine actually implements. Listing them here is what keeps the
+        field discoverable — a transform the engine does not recognise is returned unchanged
+        rather than reported, so a typo silently produces the raw source value.
+    *@
+    <datalist id="transformList">
+        <option value="ToUpper"></option>
+        <option value="ToLower"></option>
+        <option value="Trim"></option>
+        <option value="GetInitials"></option>
+        <option value="Truncate:4"></option>
+        <option value="Format:{0}@@example.com"></option>
+        <option value="Concat:{FIRST_NAME} {LAST_NAME}"></option>
+        <option value="Map:1=ValueA,2=ValueB"></option>
+        <option value="Static:Employee"></option>
+        <option value="Username:{FIRST_NAME:1}{SECOND_NAME:1}{LAST_NAME}"></option>
+        <option value="Username:{FIRST_NAME}.{LAST_NAME}"></option>
+        <option value="Username:{FIRST_NAME:1}{LAST_NAME}"></option>
+    </datalist>
+    <div class="alert alert-secondary py-2 px-3 mt-2 fs-xs mb-0">
+        <i class="bi bi-lightbulb me-1"></i>
+        @(isAr
+            ? "لتوليد اسم المستخدم من الأحرف استخدم Username: على قاعدة «المعرّف» — مثال: Username:{FIRST_NAME:1}{SECOND_NAME:1}{LAST_NAME} تعطي maalhareth. استبدل أسماء الأعمدة بأعمدة الـ View لديك."
+            : "To build the account name from letters use Username: on the identifier rule — e.g. Username:{FIRST_NAME:1}{SECOND_NAME:1}{LAST_NAME} yields maalhareth. Replace the column names with your own view's columns.")
+    </div>
+    <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-glow btn-sm" onclick="saveMappings()"><i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ الربط" : "Save Mappings")</button>
+    </div>
+</div>
+
+<!-- ═══ Section 2: Group Membership ═══ -->
+<div class="glass-card settings-section mb-4">
+    <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.15);color:var(--success)"><i class="bi bi-people-fill"></i></div>
+        <div>
+            <h6 class="fw-600 mb-0">@(isAr ? "المجموعات (Groups)" : "Group Membership")</h6>
+            <span class="fs-xs text-muted">@(isAr ? "تحديد المجموعات التي تنضم إليها الحسابات" : "Define which AD groups accounts join")</span>
+        </div>
+        <button class="btn btn-glass btn-sm ms-auto" onclick="addGroupRow()"><i class="bi bi-plus-lg me-1"></i> @(isAr ? "إضافة مجموعة" : "Add Group")</button>
+    </div>
+    <div class="table-responsive">
+        <table class="table-glass w-100">
+            <thead><tr>
+                <th style="width:30%">@(isAr ? "اسم المجموعة" : "Group Name")</th>
+                <th style="width:10%">@(isAr ? "افتراضي" : "Default")</th>
+                <th style="width:15%">@(isAr ? "حقل الشرط" : "Condition Field")</th>
+                <th style="width:10%">@(isAr ? "العملية" : "Operator")</th>
+                <th style="width:15%">@(isAr ? "القيمة" : "Value")</th>
+                <th style="width:15%">@(isAr ? "الوصف" : "Description")</th>
+                <th style="width:5%"></th>
+            </tr></thead>
+            <tbody id="groupBody">
+                @foreach (var g in Model.GroupRules)
+                {
+                    <tr>
+                        <td><input type="text" class="form-control form-control-sm grp-name" value="@g.GroupName" /></td>
+                        <td class="text-center"><input type="checkbox" class="form-check-input grp-default" @(g.IsDefault ? "checked" : "") /></td>
+                        <td><input type="text" class="form-control form-control-sm grp-cfield" value="@g.ConditionField" list="srcColumnsList" /></td>
+                        <td><select class="form-control form-control-sm grp-cop">
+                            @Html.Raw($"<option value=\"\" {(string.IsNullOrEmpty(g.ConditionOperator) ? "selected" : "")}>—</option>")
+                            @Html.Raw($"<option value=\"==\" {(g.ConditionOperator == "==" ? "selected" : "")}>=&#61;</option>")
+                            @Html.Raw($"<option value=\"!=\" {(g.ConditionOperator == "!=" ? "selected" : "")}>!&#61;</option>")
+                            @Html.Raw($"<option value=\"in\" {(g.ConditionOperator == "in" ? "selected" : "")}>in</option>")
+                        </select></td>
+                        <td><input type="text" class="form-control form-control-sm grp-cval" value="@g.ConditionValue" /></td>
+                        <td><input type="text" class="form-control form-control-sm grp-desc" value="@g.Description" /></td>
+                        <td><button class="btn btn-danger-glass btn-sm" onclick="this.closest('tr').remove()"><i class="bi bi-trash3"></i></button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-glow btn-sm" onclick="saveGroups()"><i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ المجموعات" : "Save Groups")</button>
+    </div>
+</div>
+
+<!-- ═══ Section 3: OU Placement Rules ═══ -->
+<div class="glass-card settings-section mb-4">
+    <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.15);color:var(--warning)"><i class="bi bi-diagram-2-fill"></i></div>
+        <div>
+            <h6 class="fw-600 mb-0">@(isAr ? "قواعد الـ OU" : "OU Placement Rules")</h6>
+            <span class="fs-xs text-muted">@(isAr ? "تحديد مكان وضع الحساب في هيكل الدومين بناءً على شروط" : "Where to place accounts in the AD tree based on conditions")</span>
+        </div>
+        <button class="btn btn-glass btn-sm ms-auto" onclick="addOURow()"><i class="bi bi-plus-lg me-1"></i> @(isAr ? "إضافة قاعدة" : "Add Rule")</button>
+    </div>
+    <div class="table-responsive">
+        <table class="table-glass w-100">
+            <thead><tr>
+                <th style="width:35%">@(isAr ? "قالب الـ OU" : "OU Template")</th>
+                <th style="width:5%">@(isAr ? "أولوية" : "Priority")</th>
+                <th style="width:15%">@(isAr ? "حقل الشرط" : "Condition Field")</th>
+                <th style="width:10%">@(isAr ? "العملية" : "Op")</th>
+                <th style="width:15%">@(isAr ? "القيمة" : "Value")</th>
+                <th style="width:15%">@(isAr ? "خريطة القيم (JSON)" : "Value Map (JSON)")</th>
+                <th style="width:5%"></th>
+            </tr></thead>
+            <tbody id="ouBody">
+                @foreach (var o in Model.OURules)
+                {
+                    <tr>
+                        <td><input type="text" class="form-control form-control-sm ou-tpl" value="@o.OUTemplate" placeholder="OU={GENDER},OU={CITY},{BaseDN}" /></td>
+                        <td><input type="number" class="form-control form-control-sm ou-pri" value="@o.Priority" style="width:60px" /></td>
+                        <td><input type="text" class="form-control form-control-sm ou-cfield" value="@o.ConditionField" list="srcColumnsList" /></td>
+                        <td><select class="form-control form-control-sm ou-cop">
+                            @Html.Raw($"<option value=\"\" {(string.IsNullOrEmpty(o.ConditionOperator) ? "selected" : "")}>—</option>")
+                            @Html.Raw($"<option value=\"==\" {(o.ConditionOperator == "==" ? "selected" : "")}>=&#61;</option>")
+                            @Html.Raw($"<option value=\"!=\" {(o.ConditionOperator == "!=" ? "selected" : "")}>!&#61;</option>")
+                            @Html.Raw($"<option value=\"in\" {(o.ConditionOperator == "in" ? "selected" : "")}>in</option>")
+                        </select></td>
+                        <td><input type="text" class="form-control form-control-sm ou-cval" value="@o.ConditionValue" /></td>
+                        <td><input type="text" class="form-control form-control-sm ou-vmap" value="@o.ValueMappings" placeholder='{"CITY":{"1":"SITE-A"}}' /></td>
+                        <td><button class="btn btn-danger-glass btn-sm" onclick="this.closest('tr').remove()"><i class="bi bi-trash3"></i></button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-glow btn-sm" onclick="saveOURules()"><i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ قواعد OU" : "Save OU Rules")</button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const tenantId = @Model.Id;
+    const isArLang = @(isAr ? "true" : "false");
+    const adAttrs = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(adAttributes));
+    // 🔐 Password is intentionally NOT sent to the browser — the server uses the stored (encrypted) one via TenantId.
+    const srcInfo = { TenantId: tenantId, Provider:'@Model.SourceProvider', Host:'@Model.SourceHost', Port:@Model.SourcePort, Database:'@Model.SourceDatabase', Username:'@Model.SourceUsername', TableOrView:'@Model.SourceTableOrView' };
+
+    // ═══ Settings import: preview first, apply only on explicit confirmation ═══
+
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async function previewImport() {
+        const input = document.getElementById('importFile');
+        const box = document.getElementById('importResult');
+        if (!input.files.length) return;
+
+        box.style.display = 'block';
+        box.innerHTML = `<div class="text-muted fs-sm"><span class="spinner-border spinner-border-sm me-2"></span>${isArLang ? 'جارٍ التحقق من الملف...' : 'Validating file...'}</div>`;
+
+        const fd = new FormData();
+        fd.append('tenantId', tenantId);
+        fd.append('file', input.files[0]);
+
+        let data;
+        try {
+            const res = await fetch('/Settings/PreviewSettingsImport', { method: 'POST', body: fd });
+            data = await res.json();
+        } catch (e) {
+            box.innerHTML = `<div class="alert alert-danger py-2 fs-sm">${isArLang ? 'فشل رفع الملف' : 'Upload failed'}</div>`;
+            return;
+        }
+
+        if (!data.success) {
+            box.innerHTML = `<div class="alert alert-danger py-2 fs-sm">${esc(data.message)}</div>`;
+            return;
+        }
+
+        let html = '';
+
+        if (data.errors && data.errors.length) {
+            html += `<div class="alert alert-danger py-2 fs-sm"><strong>${isArLang ? 'أخطاء تمنع الاستيراد:' : 'Blocking errors:'}</strong><ul class="mb-0 mt-1">`
+                 + data.errors.map(e => `<li>${esc(e)}</li>`).join('') + '</ul></div>';
+        }
+        if (data.warnings && data.warnings.length) {
+            html += `<div class="alert alert-warning py-2 fs-sm"><strong>${isArLang ? 'تنبيهات (لا تمنع الاستيراد):' : 'Warnings (non-blocking):'}</strong><ul class="mb-0 mt-1">`
+                 + data.warnings.map(w => `<li>${esc(w)}</li>`).join('') + '</ul></div>';
+        }
+
+        html += `<div class="table-responsive"><table class="table table-sm mb-2"><thead><tr>
+            <th>${isArLang ? 'القسم' : 'Section'}</th>
+            <th>${isArLang ? 'الحالي' : 'Current'}</th>
+            <th>${isArLang ? 'الوارد' : 'Incoming'}</th>
+            <th>${isArLang ? 'عيّنة' : 'Sample'}</th></tr></thead><tbody>`;
+
+        data.sections.forEach(s => {
+            // An absent sheet leaves that section untouched — it is not a "delete all".
+            const state = s.present
+                ? `<span class="badge bg-primary">${s.incoming}</span>`
+                : `<span class="badge bg-secondary">${isArLang ? 'لا يشمله الملف' : 'not in file'}</span>`;
+            html += `<tr><td>${esc(s.name)}</td><td>${s.existing}</td><td>${state}</td>
+                     <td class="fs-xs text-muted">${s.sample.map(x => esc(x)).join('<br>')}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+
+        if (data.canApply) {
+            html += `<div class="alert alert-warning py-2 fs-sm mb-2">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                ${isArLang
+                    ? 'الأقسام الواردة في الملف <strong>ستُستبدل بالكامل</strong>. الأقسام غير الموجودة فيه تبقى كما هي.'
+                    : 'Sections present in the file will be <strong>replaced entirely</strong>. Sections not in the file are left unchanged.'}
+            </div>
+            <button class="btn btn-glow btn-sm" onclick="applyImport()">
+                <i class="bi bi-check-lg me-1"></i>${isArLang ? 'تأكيد الاستيراد' : 'Confirm import'}
+            </button>
+            <button class="btn btn-glass btn-sm" onclick="cancelImport()">${isArLang ? 'إلغاء' : 'Cancel'}</button>`;
+        }
+
+        box.innerHTML = html;
+    }
+
+    function cancelImport() {
+        document.getElementById('importFile').value = '';
+        document.getElementById('importResult').style.display = 'none';
+    }
+
+    async function applyImport() {
+        const input = document.getElementById('importFile');
+        if (!input.files.length) return;
+
+        const box = document.getElementById('importResult');
+        box.innerHTML = `<div class="text-muted fs-sm"><span class="spinner-border spinner-border-sm me-2"></span>${isArLang ? 'جارٍ الاستيراد...' : 'Importing...'}</div>`;
+
+        // The file is re-sent and re-validated server-side; nothing from the preview is trusted.
+        const fd = new FormData();
+        fd.append('tenantId', tenantId);
+        fd.append('file', input.files[0]);
+
+        const res = await fetch('/Settings/ApplySettingsImport', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.success) {
+            box.innerHTML = `<div class="alert alert-success py-2 fs-sm">${esc(data.message)}</div>`;
+            setTimeout(() => location.reload(), 2500);
+        } else {
+            box.innerHTML = `<div class="alert alert-danger py-2 fs-sm">${esc(data.message)}</div>`;
+        }
+    }
+
+    function adAttrOptions(sel) { return adAttrs.map(a => `<option value="${a}" ${a===sel?'selected':''}>${a}</option>`).join(''); }
+    function opOptions(sel) { return `<option value="" ${!sel?'selected':''}>—</option><option value="==" ${sel==='=='?'selected':''}>==</option><option value="!=" ${sel==='!='?'selected':''}>!=</option><option value="in" ${sel==='in'?'selected':''}>in</option>`; }
+
+    function addMappingRow() {
+        document.getElementById('mappingBody').insertAdjacentHTML('beforeend',
+            `<tr><td><input type="text" class="form-control form-control-sm src-col" list="srcColumnsList" /></td><td><input type="text" class="form-control form-control-sm ad-attr" list="adAttrList" placeholder="AD attribute" /></td><td><input type="text" class="form-control form-control-sm transform" list="transformList" placeholder="Format:{0}" /></td><td class="text-center"><input type="checkbox" class="form-check-input is-req" /></td><td class="text-center"><input type="checkbox" class="form-check-input is-id" /></td><td class="text-center"><button class="btn btn-danger-glass btn-sm" onclick="this.closest('tr').remove()"><i class="bi bi-trash3"></i></button></td></tr>`);
+    }
+
+    function addGroupRow() {
+        document.getElementById('groupBody').insertAdjacentHTML('beforeend',
+            `<tr><td><input type="text" class="form-control form-control-sm grp-name" /></td><td class="text-center"><input type="checkbox" class="form-check-input grp-default" /></td><td><input type="text" class="form-control form-control-sm grp-cfield" list="srcColumnsList" /></td><td><select class="form-control form-control-sm grp-cop">${opOptions('')}</select></td><td><input type="text" class="form-control form-control-sm grp-cval" /></td><td><input type="text" class="form-control form-control-sm grp-desc" /></td><td><button class="btn btn-danger-glass btn-sm" onclick="this.closest('tr').remove()"><i class="bi bi-trash3"></i></button></td></tr>`);
+    }
+
+    function addOURow() {
+        document.getElementById('ouBody').insertAdjacentHTML('beforeend',
+            `<tr><td><input type="text" class="form-control form-control-sm ou-tpl" placeholder="OU={YOUR_COLUMN},{BaseDN}" title="${isArLang ? 'أسماء العناصر النائبة يجب أن تطابق أسماء أعمدة الـ View حرفياً' : 'Placeholder names must match your source view column names exactly'}" /></td><td><input type="number" class="form-control form-control-sm ou-pri" value="100" style="width:60px" /></td><td><input type="text" class="form-control form-control-sm ou-cfield" list="srcColumnsList" /></td><td><select class="form-control form-control-sm ou-cop">${opOptions('')}</select></td><td><input type="text" class="form-control form-control-sm ou-cval" /></td><td><input type="text" class="form-control form-control-sm ou-vmap" /></td><td><button class="btn btn-danger-glass btn-sm" onclick="this.closest('tr').remove()"><i class="bi bi-trash3"></i></button></td></tr>`);
+    }
+
+    async function fetchColumns() {
+        try {
+            const res = await fetch('/Settings/FetchSourceColumns', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(srcInfo) });
+            const data = await res.json();
+            if (data.success && data.columns.length > 0) {
+                const dl = document.getElementById('srcColumnsList');
+                dl.innerHTML = data.columns.map(c => `<option value="${c}">`).join('');
+                showToast(currentLang==='ar' ? `تم جلب ${data.columns.length} عمود` : `Fetched ${data.columns.length} columns`, 'success');
+            } else {
+                showToast(data.message || (currentLang==='ar' ? 'لم يتم العثور على أعمدة' : 'No columns found'), 'warning');
+            }
+        } catch(e) { showToast(currentLang==='ar' ? 'فشل جلب الأعمدة' : 'Failed to fetch columns', 'error'); }
+    }
+
+    async function saveMappings() {
+        const rows = document.querySelectorAll('#mappingBody tr');
+        const mappings = Array.from(rows).map((r,i) => ({
+            sourceColumn: r.querySelector('.src-col').value,
+            targetAttribute: r.querySelector('.ad-attr').value,
+            transform: r.querySelector('.transform').value || null,
+            isRequired: r.querySelector('.is-req').checked,
+            isIdentifier: r.querySelector('.is-id').checked,
+            sortOrder: i
+        })).filter(m => m.sourceColumn && m.targetAttribute);
+
+        const res = await fetch(`/Settings/SaveMappings?tenantId=${tenantId}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(mappings) });
+        const data = await res.json();
+        showToast(data.success ? (currentLang==='ar' ? 'تم حفظ الربط' : 'Mappings saved') : data.message, data.success ? 'success' : 'error');
+    }
+
+    async function saveGroups() {
+        const rows = document.querySelectorAll('#groupBody tr');
+        const groups = Array.from(rows).map(r => ({
+            groupName: r.querySelector('.grp-name').value,
+            isDefault: r.querySelector('.grp-default').checked,
+            conditionField: r.querySelector('.grp-cfield').value || null,
+            conditionOperator: r.querySelector('.grp-cop').value || null,
+            conditionValue: r.querySelector('.grp-cval').value || null,
+            description: r.querySelector('.grp-desc').value || null
+        })).filter(g => g.groupName);
+
+        const res = await fetch(`/Settings/SaveGroups?tenantId=${tenantId}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(groups) });
+        const data = await res.json();
+        showToast(data.success ? (currentLang==='ar' ? 'تم حفظ المجموعات' : 'Groups saved') : data.message, data.success ? 'success' : 'error');
+    }
+
+    async function saveOURules() {
+        const rows = document.querySelectorAll('#ouBody tr');
+        const rules = Array.from(rows).map(r => ({
+            ouTemplate: r.querySelector('.ou-tpl').value,
+            priority: parseInt(r.querySelector('.ou-pri').value) || 100,
+            conditionField: r.querySelector('.ou-cfield').value || null,
+            conditionOperator: r.querySelector('.ou-cop').value || null,
+            conditionValue: r.querySelector('.ou-cval').value || null,
+            valueMappings: r.querySelector('.ou-vmap').value || null
+        })).filter(r => r.ouTemplate);
+
+        const res = await fetch(`/Settings/SaveOURules?tenantId=${tenantId}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(rules) });
+        const data = await res.json();
+        showToast(data.success ? (currentLang==='ar' ? 'تم حفظ قواعد OU' : 'OU rules saved') : data.message, data.success ? 'success' : 'error');
+    }
+
+    async function loadDefaultMappings() {
+        const msg = currentLang === 'ar'
+            ? 'سيتم حذف جميع الربط والمجموعات وقواعد OU الحالية واستبدالها بالإعدادات الافتراضية. هل أنت متأكد؟'
+            : 'This will replace ALL current mappings, groups, and OU rules with defaults. Are you sure?';
+        if (!confirm(msg)) return;
+
+        try {
+            const res = await fetch(`/Settings/LoadDefaultMappings?tenantId=${tenantId}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                showToast(currentLang === 'ar'
+                    ? `تم تحميل ${data.mappingCount} ربط و ${data.groupCount} مجموعة و ${data.ouCount} قاعدة OU`
+                    : `Loaded ${data.mappingCount} mappings, ${data.groupCount} groups, ${data.ouCount} OU rules`, 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.message, 'error');
+            }
+        } catch (e) {
+            showToast(currentLang === 'ar' ? 'فشل تحميل الربط الافتراضي' : 'Failed to load defaults', 'error');
+        }
+    }
+</script>
+}

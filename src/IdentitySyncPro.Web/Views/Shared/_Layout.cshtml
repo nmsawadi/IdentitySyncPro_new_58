@@ -1,0 +1,399 @@
+﻿@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject IdentitySyncPro.Web.Security.SessionPolicy SessionPolicy
+@{
+    var lang = ViewBag.Lang as string ?? "ar";
+    var isAr = lang == "ar";
+    var dir = isAr ? "rtl" : "ltr";
+    var csrfToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
+    var displayName = User.FindFirst("display_name")?.Value ?? User.Identity?.Name ?? "";
+    var userRole = User.IsInRole("Admin") ? (isAr ? "مدير" : "Admin")
+                 : User.IsInRole("Operator") ? (isAr ? "مشغّل" : "Operator")
+                 : (isAr ? "مشاهد" : "Viewer");
+}
+<!DOCTYPE html>
+<html lang="@lang" dir="@dir" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - IdentitySync Pro</title>
+    <meta name="description" content="@(isAr ? "منصة إدارة ومزامنة الهويات المؤسسية" : "Enterprise Identity Management & Synchronization Platform")" />
+    <meta name="csrf-token" content="@csrfToken" />
+
+    <!-- Google Fonts (Arabic + English) -->
+    <link href="~/lib/fonts/fonts.css" rel="stylesheet" />
+
+    <!-- Bootstrap 5 RTL -->
+    @if (isAr)
+    {
+        <link href="~/lib/bootstrap-5.3.3/css/bootstrap.rtl.min.css" rel="stylesheet">
+    }
+    else
+    {
+        <link href="~/lib/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    }
+
+    <!-- Bootstrap Icons -->
+    <link href="~/lib/bootstrap-icons-1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="~/lib/chartjs/chart.umd.min.js"></script>
+
+    <!-- SignalR -->
+    <script src="~/lib/signalr/signalr.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav id="sidebar" class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <div class="brand-text">
+                <h5 class="mb-0">IdentitySync</h5>
+                <small class="text-muted">Pro v1.0</small>
+            </div>
+        </div>
+
+        <div class="sidebar-nav">
+            <div class="nav-section">
+                <span class="nav-section-title">@(isAr ? "الرئيسية" : "MAIN")</span>
+            </div>
+
+            <a href="@Url.Action("Index", "Dashboard")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Dashboard" ? "active" : "")" id="nav-dashboard">
+                <i class="bi bi-grid-1x2-fill"></i>
+                <span>@(isAr ? "لوحة التحكم" : "Dashboard")</span>
+            </a>
+
+            <a href="@Url.Action("Index", "Identity")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Identity" ? "active" : "")" id="nav-identities">
+                <i class="bi bi-people-fill"></i>
+                <span>@(isAr ? "الهويات" : "Identities")</span>
+            </a>
+
+            <div class="nav-section">
+                <span class="nav-section-title">@(isAr ? "محرك المزامنة" : "SYNC ENGINE")</span>
+            </div>
+
+            <a href="@Url.Action("Index", "Sync")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Sync" && ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "active" : "")" id="nav-sync">
+                <i class="bi bi-arrow-repeat"></i>
+                <span>@(isAr ? "عمليات المزامنة" : "Sync Runs")</span>
+            </a>
+
+            <a href="@Url.Action("Live", "Sync")" class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Live" ? "active" : "")" id="nav-live">
+                <i class="bi bi-broadcast-pin"></i>
+                <span>@(isAr ? "المراقبة المباشرة" : "Live Monitor")</span>
+                <span class="badge bg-success pulse-dot ms-auto" id="liveBadge" style="display:none;">@(isAr ? "مباشر" : "LIVE")</span>
+            </a>
+
+            <div class="nav-section">
+                <span class="nav-section-title">@(isAr ? "الإدارة" : "ADMINISTRATION")</span>
+            </div>
+
+            <a href="@Url.Action("Index", "Connector")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Connector" ? "active" : "")" id="nav-connectors">
+                <i class="bi bi-plug-fill"></i>
+                <span>@(isAr ? "الموصّلات" : "Connectors")</span>
+            </a>
+
+            <a href="@Url.Action("Index", "Rules")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Rules" ? "active" : "")" id="nav-rules">
+                <i class="bi bi-diagram-3-fill"></i>
+                <span>@(isAr ? "محرك القواعد" : "Rules Engine")</span>
+            </a>
+
+            <a href="@Url.Action("Index", "Lifecycle")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Lifecycle" ? "active" : "")" id="nav-lifecycle">
+                <i class="bi bi-recycle"></i>
+                <span>@(isAr ? "إدارة دورة الحياة" : "Lifecycle Management")</span>
+            </a>
+
+            <a href="@Url.Action("Index", "AccountStatus")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "AccountStatus" ? "active" : "")" id="nav-accountstatus">
+                <i class="bi bi-person-lock"></i>
+                <span>@(isAr ? "تعطيل وتفعيل الحسابات" : "Account Status")</span>
+            </a>
+
+            <div class="nav-section">
+                <span class="nav-section-title">@(isAr ? "حوكمة الوصول" : "ACCESS GOVERNANCE")</span>
+            </div>
+
+            @* Open to every signed-in user: an approver is a department head signing off on their
+               own people, not a system operator. Gating this on a console role would mean handing
+               the console to every manager who has to approve something. The authority comes from
+               the catalog item's approver list, checked when the decision is taken. *@
+            <a href="@Url.Action("Index", "AccessRequests")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "AccessRequests" ? "active" : "")" id="nav-accessrequests">
+                <i class="bi bi-key-fill"></i>
+                <span>@(isAr ? "طلبات الوصول" : "Access Requests")</span>
+            </a>
+
+            @* Open for the same reason approvals are: a reviewer is a department head answering
+               for their own people, not a system operator. *@
+            <a href="@Url.Action("Index", "AccessReview")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "AccessReview" ? "active" : "")" id="nav-accessreview">
+                <i class="bi bi-clipboard-check-fill"></i>
+                <span>@(isAr ? "مراجعة الصلاحيات" : "Access Review")</span>
+            </a>
+
+            @* Also open to everyone signed in: the person who knows what a service account is for
+               is rarely the person holding the console, and owning one grants no privilege. *@
+            <a href="@Url.Action("Index", "NhiOwnership")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "NhiOwnership" ? "active" : "")" id="nav-nhiownership">
+                <i class="bi bi-robot"></i>
+                <span>@(isAr ? "حساباتي غير البشرية" : "My Service Accounts")</span>
+            </a>
+
+            @if (User.IsInRole("Admin"))
+            {
+                <a href="@Url.Action("Index", "AccessCatalog")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "AccessCatalog" ? "active" : "")" id="nav-accesscatalog">
+                    <i class="bi bi-journal-check"></i>
+                    <span>@(isAr ? "كتالوج الوصول" : "Access Catalog")</span>
+                </a>
+
+                <a href="@Url.Action("Index", "AccessCampaigns")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "AccessCampaigns" ? "active" : "")" id="nav-accesscampaigns">
+                    <i class="bi bi-clipboard-data-fill"></i>
+                    <span>@(isAr ? "حملات المراجعة" : "Campaigns")</span>
+                </a>
+
+                <a href="@Url.Action("Index", "NhiAccounts")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "NhiAccounts" ? "active" : "")" id="nav-nhiaccounts">
+                    <i class="bi bi-diagram-3-fill"></i>
+                    <span>@(isAr ? "الحسابات غير البشرية" : "Non-Human Accounts")</span>
+                </a>
+            }
+
+            <div class="nav-section">
+                <span class="nav-section-title">@(isAr ? "الخدمات" : "SERVICES")</span>
+            </div>
+
+            <a href="@Url.Action("Index", "Services")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Services" ? "active" : "")" id="nav-services">
+                <i class="bi bi-box-seam-fill"></i>
+                <span>@(isAr ? "إدارة الخدمات" : "Services")</span>
+            </a>
+
+            <a href="@Url.Action("Index", "SmsCenter")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "SmsCenter" ? "active" : "")" id="nav-smscenter">
+                <i class="bi bi-chat-dots-fill"></i>
+                <span>@(isAr ? "مركز الإشعارات" : "Notifications Center")</span>
+            </a>
+
+            <a href="@Url.Action("Index", "Settings")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Settings" ? "active" : "")" id="nav-settings">
+                <i class="bi bi-sliders2"></i>
+                <span>@(isAr ? "الإعدادات" : "Settings")</span>
+            </a>
+
+            @if (User.IsInRole("Admin"))
+            {
+                <a href="@Url.Action("Index", "Users")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Users" ? "active" : "")" id="nav-users">
+                    <i class="bi bi-person-badge-fill"></i>
+                    <span>@(isAr ? "مستخدمو النظام" : "Console Users")</span>
+                </a>
+
+                <a href="@Url.Action("Index", "SsprSettings")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "SsprSettings" ? "active" : "")" id="nav-sspr">
+                    <i class="bi bi-key-fill"></i>
+                    <span>@(isAr ? "الخدمة الذاتية لكلمة المرور" : "Self-Service Reset")</span>
+                </a>
+            }
+
+            <a href="@Url.Action("Index", "Audit")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Audit" ? "active" : "")" id="nav-audit">
+                <i class="bi bi-journal-text"></i>
+                <span>@(isAr ? "سجل التدقيق" : "Audit Trail")</span>
+            </a>
+
+            <a href="@Url.Action("Index", "Reports")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Reports" ? "active" : "")" id="nav-reports">
+                <i class="bi bi-graph-up-arrow"></i>
+                <span>@(isAr ? "التقارير" : "Reports")</span>
+            </a>
+
+            <a href="@Url.Action("Index", "Health")" class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Health" ? "active" : "")" id="nav-health">
+                <i class="bi bi-heart-pulse-fill"></i>
+                <span>@(isAr ? "صحة النظام" : "System Health")</span>
+            </a>
+
+            <a href="/hangfire" class="nav-link" target="_blank" id="nav-jobs">
+                <i class="bi bi-gear-fill"></i>
+                <span>@(isAr ? "لوحة المهام" : "Job Dashboard")</span>
+                <i class="bi bi-box-arrow-up-right ms-auto small"></i>
+            </a>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="connector-status">
+                <div class="status-item" id="oracleStatus">
+                    <span class="status-dot bg-secondary"></span>
+                    <span class="small">Oracle</span>
+                </div>
+                <div class="status-item" id="adStatus">
+                    <span class="status-dot bg-secondary"></span>
+                    <span class="small">AD</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main id="main-content" class="main-content">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="btn btn-link sidebar-toggle" id="sidebarToggle">
+                    <i class="bi bi-list"></i>
+                </button>
+                <h4 class="page-title mb-0">@ViewData["Title"]</h4>
+            </div>
+            <div class="topbar-right">
+                <!-- Language Toggle -->
+                <div class="lang-toggle" id="langToggle">
+                    <button class="lang-btn @(isAr ? "active" : "")" onclick="switchLang('ar')">عربي</button>
+                    <button class="lang-btn @(!isAr ? "active" : "")" onclick="switchLang('en')">EN</button>
+                </div>
+                <div class="topbar-item" id="syncStatusIndicator">
+                    <i class="bi bi-circle-fill text-success small"></i>
+                    <span class="small text-muted">@(isAr ? "النظام جاهز" : "System Idle")</span>
+                </div>
+                <div class="topbar-item">
+                    <span class="small text-muted" id="currentTime"></span>
+                </div>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <div class="topbar-item d-flex align-items-center gap-2">
+                        <i class="bi bi-person-circle" style="color:var(--accent-primary);font-size:1.05rem"></i>
+                        <span class="small">@displayName</span>
+                        <span class="badge bg-secondary bg-opacity-25 text-muted" style="font-size:0.65rem">@userRole</span>
+                        <form method="post" action="@Url.Action("Logout", "Account")" class="d-inline m-0">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-link p-0 text-muted" title="@(isAr ? "تسجيل الخروج" : "Logout")" style="line-height:1">
+                                <i class="bi bi-box-arrow-left"></i>
+                            </button>
+                        </form>
+                    </div>
+                }
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <div class="page-content">
+            @RenderBody()
+        </div>
+    </main>
+
+    <!-- Notification Toast Container -->
+    <div class="toast-container position-fixed bottom-0 p-3" style="@(isAr ? "left:0" : "right:0")" id="toastContainer"></div>
+
+    <!-- Bootstrap JS -->
+    <script src="~/lib/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Global JS -->
+    <script>
+        // ✅ CSRF: transparently attach the antiforgery token to every non-GET fetch()
+        (function () {
+            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            if (!token) return;
+            const originalFetch = window.fetch;
+            window.fetch = function (url, options) {
+                options = options || {};
+                const method = (options.method || 'GET').toUpperCase();
+                if (method !== 'GET' && method !== 'HEAD') {
+                    if (options.headers instanceof Headers) {
+                        options.headers.set('X-CSRF-TOKEN', token);
+                    } else {
+                        options.headers = Object.assign({}, options.headers, { 'X-CSRF-TOKEN': token });
+                    }
+                }
+                return originalFetch(url, options);
+            };
+        })();
+
+        // ✅ Session keep-alive — refreshes the sliding auth cookie while the user is ACTIVE.
+        // Fully self-contained (no new globals): a name collision here would silently kill
+        // every script below it in this block.
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <text>
+        (function () {
+            const idleMinutes = @SessionPolicy.IdleTimeoutMinutes;
+
+            // Ping at 40% of the window: the cookie is only reissued once more than half of it
+            // has elapsed, so a slower period would let an actively-used session expire anyway.
+            const periodMs = Math.max(60, Math.floor(idleMinutes * 60 * 0.4)) * 1000;
+
+            let activeSinceLastPing = false;
+            const markActive = () => { activeSinceLastPing = true; };
+
+            ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(evt =>
+                window.addEventListener(evt, markActive, { passive: true }));
+
+            setInterval(function () {
+                // No interaction since the last tick = genuinely idle. Let the session lapse;
+                // that is the whole point of the timeout.
+                if (!activeSinceLastPing) return;
+                activeSinceLastPing = false;
+                fetch('/Home/KeepAlive', { method: 'GET', cache: 'no-store' }).catch(() => { });
+            }, periodMs);
+        })();
+            </text>
+        }
+
+        // Current language
+        const currentLang = '@lang';
+        const isRtl = currentLang === 'ar';
+
+        // Language switching (Home endpoint — available to every signed-in role)
+        function switchLang(lang) {
+            fetch('/Home/SetLanguage?lang=' + lang, { method: 'POST' })
+                .then(() => location.reload())
+                .catch(() => location.reload());
+        }
+
+        // Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString(isRtl ? 'ar-SA' : 'en-US', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Sidebar toggle
+        document.getElementById('sidebarToggle')?.addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('main-content').classList.toggle('expanded');
+        });
+
+        // Toast notification
+        function showToast(message, type = 'info') {
+            const icons = { success: 'check-circle-fill', error: 'x-circle-fill', warning: 'exclamation-triangle-fill', info: 'info-circle-fill' };
+            const colors = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#6366f1' };
+
+            const toastHtml = `
+                <div class="toast show glass-toast" role="alert">
+                    <div class="toast-body d-flex align-items-center gap-2">
+                        <i class="bi bi-${icons[type]}" style="color:${colors[type]}"></i>
+                        <span>${message}</span>
+                        <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>`;
+
+            const container = document.getElementById('toastContainer');
+            container.insertAdjacentHTML('beforeend', toastHtml);
+
+            setTimeout(() => {
+                const toast = container.lastElementChild;
+                toast?.remove();
+            }, 5000);
+        }
+
+        // Number animation
+        function animateValue(id, start, end, duration) {
+            const obj = document.getElementById(id);
+            if (!obj) return;
+            const range = end - start;
+            const increment = end > start ? 1 : -1;
+            const stepTime = Math.abs(Math.floor(duration / range)) || 1;
+            let current = start;
+            const timer = setInterval(() => {
+                current += increment * Math.max(1, Math.floor(range / 50));
+                if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                    current = end;
+                    clearInterval(timer);
+                }
+                obj.textContent = current.toLocaleString();
+            }, stepTime);
+        }
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

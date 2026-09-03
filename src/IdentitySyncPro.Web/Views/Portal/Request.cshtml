@@ -1,0 +1,108 @@
+@using IdentitySyncPro.Core.Models.Governance
+@{
+    Layout = "_PortalLayout";
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "طلب وصول" : "Request Access";
+    var catalog = ViewBag.Catalog as List<GovCatalogItem> ?? new List<GovCatalogItem>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0">@(isAr ? "طلب وصول" : "Request access")</h5>
+    <a href="@Url.Action("Index", "Portal")" class="btn btn-sm btn-outline-light">
+        <i class="bi bi-arrow-@(isAr ? "right" : "left") me-1"></i>@(isAr ? "رجوع" : "Back")
+    </a>
+</div>
+
+@if (!catalog.Any())
+{
+    <div class="portal-card text-center py-5">
+        <i class="bi bi-journal-x fs-1 muted d-block mb-3"></i>
+        <p class="muted mb-1">@(isAr ? "لا يوجد شيء متاح لك لطلبه حالياً." : "There is nothing available for you to request.")</p>
+        @* Distinguishing the three reasons matters: "nothing exists", "you already have it" and
+           "you are not eligible" feel identical on an empty page, and only the last is worth
+           talking to somebody about. *@
+        <p class="muted fs-xs mb-0">
+            @(isAr
+                ? "قد يكون السبب أنك تملك هذه الصلاحيات أصلاً، أو أنها مخصصة لفئة أخرى. راجع إدارة الهوية الرقمية إن كنت تتوقع غير ذلك."
+                : "You may already hold these, or they may be intended for another group. Contact IT if you expected otherwise.")
+        </p>
+    </div>
+}
+else
+{
+    <form method="post" action="@Url.Action("Request", "Portal")">
+        @Html.AntiForgeryToken()
+
+        <div class="portal-card">
+            @* The subject is fixed to the signed-in account and is not a form field at all — it is
+               shown so the person can see exactly which account they are asking for. *@
+            <div class="alert alert-secondary py-2 fs-xs mb-4">
+                <i class="bi bi-person-badge me-1"></i>
+                @(isAr ? "الطلب لحسابك" : "The request is for your account"):
+                <strong dir="ltr">@User.Identity!.Name</strong>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">@(isAr ? "ما الذي تحتاجه؟" : "What do you need?") <span class="text-danger">*</span></label>
+                <select name="catalogItemId" id="catalogItem" class="form-select" required>
+                    <option value="">@(isAr ? "— اختر —" : "— choose —")</option>
+                    @foreach (var item in catalog)
+                    {
+                        <option value="@item.Id"
+                                data-description="@item.Description"
+                                data-duration="@item.AccessDurationDays"
+                                selected="@(ViewBag.CatalogItemId as int? == item.Id)">@item.DisplayName</option>
+                    }
+                </select>
+                <div class="form-text muted fs-xs" id="itemHelp"></div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label">@(isAr ? "لماذا تحتاجه؟" : "Why do you need it?") <span class="text-danger">*</span></label>
+                <textarea name="justification" class="form-control" rows="3" required
+                          placeholder="@(isAr ? "اذكر السبب باختصار" : "Briefly, what is it for?")">@ViewBag.Justification</textarea>
+                <div class="form-text muted fs-xs">
+                    @(isAr ? "سيقرأه من يعتمد طلبك — كلما كان أوضح كان القرار أسرع."
+                           : "The person approving your request reads this — the clearer it is, the faster the decision.")
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-send me-1"></i>@(isAr ? "إرسال الطلب" : "Send request")
+        </button>
+    </form>
+}
+
+@section Scripts {
+<script>
+    // What the choice actually means, before it is sent rather than after. Time-bound access in
+    // particular: an employee who is not told it ends will report its disappearance as a fault.
+    (function () {
+        var select = document.getElementById('catalogItem');
+        var help = document.getElementById('itemHelp');
+        if (!select || !help) return;
+
+        var isAr = @(isAr ? "true" : "false");
+
+        function describe() {
+            var option = select.options[select.selectedIndex];
+            if (!option || !option.value) { help.textContent = ''; return; }
+
+            var parts = [];
+            var description = option.getAttribute('data-description');
+            var duration = parseInt(option.getAttribute('data-duration') || '0', 10);
+
+            if (description) parts.push(description);
+            parts.push(duration > 0
+                ? (isAr ? ('ينتهي تلقائياً بعد ' + duration + ' يوماً') : ('Ends automatically after ' + duration + ' days'))
+                : (isAr ? 'لا ينتهي تلقائياً' : 'Does not expire automatically'));
+
+            help.textContent = parts.join(' · ');
+        }
+
+        select.addEventListener('change', describe);
+        describe();
+    })();
+</script>
+}

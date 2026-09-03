@@ -1,0 +1,41 @@
+<Project>
+
+  <!--
+    Static security analysis, applied to every project in the solution.
+
+    The .NET SDK ships security analyzers (CA2100 SQL injection, CA3001-CA3012 injection rules,
+    CA5350-CA5404 weak crypto and unsafe XML/deserialization) but leaves almost all of them off at
+    the default analysis mode. Nothing here is downloaded — the rules are already on disk.
+
+    Only the SECURITY category is raised. AnalysisMode=All would also enable style, design, and
+    performance rules and produce thousands of findings on an existing codebase, which is the
+    reliable way to make an analyser get ignored.
+
+    Findings are warnings, not errors: the build must keep working while they are triaged. Promote
+    an individual rule to an error once the codebase is clean of it, so it cannot come back.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisModeSecurity>All</AnalysisModeSecurity>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      CA5391 "use antiforgery tokens in ASP.NET Core MVC controllers" fires on every non-GET action
+      in the solution — 61 of them. All are already protected: Program.cs registers
+      AutoValidateAntiforgeryTokenAttribute as a global filter, and the rule only recognises the
+      attribute written on a controller or an action, so it cannot see it.
+
+      Suppressed because 61 findings that are all wrong is not a warning, it is camouflage — the
+      next real one would be lost among them.
+
+      Note what this rule cannot tell you, which is the part worth watching: three places opt OUT
+      with [IgnoreAntiforgeryToken] — ScimController (API-key auth, no ambient cookie),
+      SmsCallbackController (provider webhook), and ServicesController.SaveMappings. Those are the
+      ones to review, and CA5391 says nothing about them.
+    -->
+    <NoWarn>$(NoWarn);CA5391</NoWarn>
+  </PropertyGroup>
+
+</Project>

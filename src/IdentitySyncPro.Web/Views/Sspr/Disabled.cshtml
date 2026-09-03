@@ -1,0 +1,13 @@
+@{
+    Layout = "_SsprLayout";
+    var isAr = (ViewBag.SsprLang as string ?? "ar") == "ar";
+}
+<div class="text-center">
+    <div class="brand-icon" id="brandIcon" style="background:linear-gradient(135deg,#64748b,#475569)"><i class="bi bi-slash-circle"></i></div>
+    <h5 class="fw-bold mb-2">@(isAr ? "الخدمة غير متاحة" : "Service Unavailable")</h5>
+    <p class="text-muted small">
+        @(isAr
+            ? "خدمة إعادة تعيين كلمة المرور الذاتية غير مفعّلة حالياً. تواصل مع الدعم الفني لجهتك."
+            : "The self-service password reset portal is currently disabled. Please contact your organization's IT support.")
+    </p>
+</div>

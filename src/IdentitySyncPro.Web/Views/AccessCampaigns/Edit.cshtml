@@ -1,0 +1,157 @@
+@model IdentitySyncPro.Core.Models.Governance.GovCampaign
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? (isAr ? "حملة مراجعة جديدة" : "New Campaign") : Model.Name;
+    var tenants = ViewBag.Tenants as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var catalog = ViewBag.CatalogItems as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="@Url.Action("Index")" class="btn btn-glass btn-sm"><i class="bi bi-arrow-@(isAr ? "right" : "left")"></i></a>
+    <div>
+        <h5 class="fw-700 mb-1">
+            <i class="bi bi-clipboard-data-fill me-2 text-accent"></i>
+            @(isNew ? (isAr ? "حملة مراجعة جديدة" : "New Campaign") : Model.Name)
+        </h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr ? "تُلتقط العضويات عند الإطلاق، وتُراجَع، ويُسحب ما لم يُقرَّر عند المهلة" : "Memberships are captured at launch, reviewed, and the undecided are revoked at the deadline")
+        </p>
+    </div>
+</div>
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<form method="post" action="@Url.Action("Edit")">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="Id" value="@Model.Id" />
+
+    <div class="glass-card">
+        <h6 class="fw-700 mb-3"><i class="bi bi-card-text me-2 text-primary"></i>@(isAr ? "التعريف" : "Identity")</h6>
+        <div class="row g-3">
+            <div class="col-md-5">
+                <label class="form-label">@(isAr ? "اسم الحملة" : "Campaign name") <span class="text-danger">*</span></label>
+                <input type="text" name="Name" class="form-control bg-transparent" value="@Model.Name" required
+                       placeholder="@(isAr ? "مراجعة الصلاحيات الإدارية — الربع الثالث" : "Privileged access review — Q3")" />
+            </div>
+            <div class="col-md-7">
+                <label class="form-label">@(isAr ? "الوصف" : "Description")</label>
+                <input type="text" name="Description" class="form-control bg-transparent" value="@Model.Description" />
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card mt-3">
+        <h6 class="fw-700 mb-3"><i class="bi bi-bullseye me-2 text-primary"></i>@(isAr ? "النطاق" : "Scope")</h6>
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label class="form-label">@(isAr ? "مجموعات AD صريحة" : "Explicit AD groups")</label>
+                <input type="text" name="ScopeGroups" class="form-control bg-transparent" value="@Model.ScopeGroups"
+                       dir="ltr" placeholder="Domain Admins, DB-Admin" />
+                @* Why this exists beside the catalog source. *@
+                <div class="form-text">
+                    @(isAr ? "مفصولة بفاصلة. أهم ما يُراجَع فعلاً — Domain Admins مثلاً — لم يُطلب من الكتالوج قط، فلا يصل إليه النطاق الآخر."
+                           : "Comma-separated. The groups most worth reviewing were never requested from the catalog, so the other scope never reaches them.")
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@(isAr ? "جهة المجموعات الصريحة" : "Tenant for explicit groups")</label>
+                <select name="ScopeTenantId" class="form-select bg-transparent">
+                    <option value="">@(isAr ? "— لا مجموعات صريحة —" : "— none —")</option>
+                    @foreach (var t in tenants)
+                    {
+                        <option value="@t.Id" selected="@(Model.ScopeTenantId == t.Id)">@t.TenantName</option>
+                    }
+                </select>
+                <div class="form-text">@(isAr ? "إلزامية متى وُجدت مجموعة صريحة" : "Required whenever an explicit group is named")</div>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">@(isAr ? "عناصر كتالوج" : "Catalog items")</label>
+                <input type="text" name="ScopeCatalogItemIds" class="form-control bg-transparent"
+                       value="@Model.ScopeCatalogItemIds" dir="ltr" placeholder="1, 2, 5" />
+                <div class="form-text">
+                    @(isAr ? "معرّفات مفصولة بفاصلة — يرث كل عنصر جهته ومجموعته." : "Comma-separated ids — each brings its own tenant and group.")
+                    @if (catalog.Any())
+                    {
+                        <span class="d-block mt-1" dir="ltr">
+                            @foreach (var item in catalog)
+                            {
+                                <span class="badge badge-secondary me-1">@item.Id — @item.DisplayName (@item.GroupName)</span>
+                            }
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card mt-3">
+        <h6 class="fw-700 mb-3"><i class="bi bi-person-check-fill me-2 text-primary"></i>@(isAr ? "من يراجع" : "Who reviews")</h6>
+
+        <div class="alert alert-danger py-2 px-3 fs-xs">
+            <i class="bi bi-exclamation-octagon-fill me-1"></i>
+            @(isAr
+                ? "لا بد من مُراجِع. حملة بلا مُراجِع ليست طابوراً معطّلاً — لا أحد يقرّر، وتصل المهلة، فتُسحب كل عضوية في النطاق. هذا انقطاعٌ مجدول."
+                : "A reviewer is required. A campaign with none is not a stalled queue — nobody decides, the deadline arrives, and every membership in scope is revoked. That is a scheduled outage.")
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">@(isAr ? "مُراجِعون بالاسم" : "Named reviewers")</label>
+                <input type="text" name="ReviewerUsers" class="form-control bg-transparent" value="@Model.ReviewerUsers"
+                       dir="ltr" placeholder="manager1, manager2" />
+                <div class="form-text">@(isAr ? "هؤلاء وحدهم تظهر لهم الحملة في «بانتظار مراجعتي»" : "Only these see it in \"Awaiting my review\"")</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@(isAr ? "مجموعة AD للمُراجِعين" : "Reviewer AD group")</label>
+                <input type="text" name="ReviewerAdGroup" class="form-control bg-transparent" value="@Model.ReviewerAdGroup" dir="ltr" />
+                <div class="form-text">@(isAr ? "يراجع أعضاؤها من رابط الحملة" : "Members review from the campaign link")</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@(isAr ? "بريد إشعار المُراجِعين" : "Reviewer mailbox")</label>
+                <input type="email" name="ReviewerNotificationEmail" class="form-control bg-transparent"
+                       value="@Model.ReviewerNotificationEmail" dir="ltr" placeholder="reviewers@example.edu" />
+                <div class="form-text">
+                    @(isAr ? "مُراجِعٌ لا يعلم بالحملة لا يراجعها — والمهلة تسحب ما كان عليه أن يعتمده."
+                           : "A reviewer who never hears about it does not review it — and the deadline revokes what they were meant to certify.")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card mt-3">
+        <h6 class="fw-700 mb-3"><i class="bi bi-alarm-fill me-2 text-primary"></i>@(isAr ? "المهلة وما بعدها" : "The deadline, and after")</h6>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">@(isAr ? "مهلة المراجعة (أيام)" : "Review window (days)") <span class="text-danger">*</span></label>
+                <input type="number" name="ReviewDays" class="form-control bg-transparent"
+                       value="@(isNew ? 14 : Model.ReviewDays)" min="1" required />
+            </div>
+            <div class="col-md-8">
+                <label class="form-label">@(isAr ? "أعلى نسبة مهملة يُسمح معها بالسحب التلقائي (٪)" : "Auto-revoke ceiling on undecided (%)")</label>
+                <input type="number" name="MaxUndecidedRevokePercent" class="form-control bg-transparent"
+                       value="@(isNew ? 50 : Model.MaxUndecidedRevokePercent)" min="0" max="100" />
+                @* The reasoning behind the number, where the number is set. *@
+                <div class="form-text">
+                    @(isAr
+                        ? "ما لا يُقرَّر عند المهلة يُسحب — هذه هي السياسة. لكن حملةً لم يُقرَّر فيها شيء ليست حكماً على الوصول: هي مُراجِعٌ لم يفتحها. فإن تجاوز المهمل هذه النسبة تُوقَف السحوبات للحملة كلها ويُكتب السبب فيها. صفر = لا سحب إلا بمراجعة كاملة."
+                        : "Whatever is undecided at the deadline is revoked — that is the policy. But a campaign nobody decided is not a verdict on the access, it is a reviewer who never opened it. Above this share, revocation is stopped for the whole campaign and the reason is written into it. Zero = revoke only after a complete review.")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card mt-3 d-flex justify-content-between">
+        <a href="@Url.Action("Index")" class="btn btn-glass">@(isAr ? "إلغاء" : "Cancel")</a>
+        <button type="submit" class="btn btn-accent btn-lg">
+            <i class="bi bi-check-lg me-1"></i>@(isAr ? "حفظ كمسودّة" : "Save as draft")
+        </button>
+    </div>
+</form>

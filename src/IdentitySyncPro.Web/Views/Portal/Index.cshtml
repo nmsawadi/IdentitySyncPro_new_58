@@ -1,0 +1,125 @@
+@model List<IdentitySyncPro.Core.Models.Governance.GovAccessRequest>
+@{
+    Layout = "_PortalLayout";
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "طلباتي" : "My Requests";
+
+    (string Cls, string Icon, string Text) Decision(string s) => s switch
+    {
+        "Pending"   => ("bg-warning text-dark", "bi-hourglass-split",   isAr ? "بانتظار القرار" : "Awaiting a decision"),
+        "Approved"  => ("bg-success",           "bi-check-circle-fill", isAr ? "معتمَد" : "Approved"),
+        "Rejected"  => ("bg-danger",            "bi-x-circle-fill",     isAr ? "مرفوض" : "Rejected"),
+        "Cancelled" => ("bg-secondary",         "bi-slash-circle",      isAr ? "سحبته" : "Withdrawn"),
+        "Expired"   => ("bg-danger",            "bi-alarm-fill",        isAr ? "انتهت مهلته بلا قرار" : "Expired undecided"),
+        _           => ("bg-secondary",         "bi-dot",               s)
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0">@(isAr ? "طلباتي" : "My requests")</h5>
+    <a href="@Url.Action("Request", "Portal")" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>@(isAr ? "طلب وصول جديد" : "Request access")
+    </a>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="portal-card text-center py-5">
+        <i class="bi bi-inbox fs-1 muted d-block mb-3"></i>
+        <p class="muted mb-3">@(isAr ? "لا توجد طلبات على حسابك." : "There are no requests on your account.")</p>
+        <a href="@Url.Action("Request", "Portal")" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>@(isAr ? "طلب وصول جديد" : "Request access")
+        </a>
+    </div>
+}
+else
+{
+    foreach (var r in Model)
+    {
+        var d = Decision(r.Status);
+
+        <div class="portal-card">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <div class="fw-bold mb-1">@(r.CatalogItem?.DisplayName ?? "—")</div>
+                    <div class="muted fs-xs">@r.Justification</div>
+                </div>
+                <div class="text-end">
+                    <span class="badge @d.Cls"><i class="bi @d.Icon me-1"></i>@d.Text</span>
+
+                    @* The decision and the grant are two facts, shown as two. "Approved" alone over
+                       an access that never reached the directory is a true statement covering a
+                       failure — and the person reading it is the one who would be left waiting. *@
+                    @if (r.Status == "Approved")
+                    {
+                        if (r.ExecutionStatus == "Succeeded" && r.AccessRevokedUtc != null)
+                        {
+                            <span class="badge bg-secondary ms-1">
+                                <i class="bi bi-clock-history me-1"></i>@(isAr ? "انتهت المدة وسُحب" : "Period ended, revoked")
+                            </span>
+                        }
+                        else if (r.ExecutionStatus == "Succeeded")
+                        {
+                            <span class="badge bg-info text-dark ms-1">
+                                <i class="bi bi-unlock-fill me-1"></i>
+                                @(r.AccessExpiresUtc == null
+                                    ? (isAr ? "الوصول فعّال" : "Access active")
+                                    : (isAr ? $"فعّال حتى {r.AccessExpiresUtc:yyyy-MM-dd}" : $"active until {r.AccessExpiresUtc:yyyy-MM-dd}"))
+                            </span>
+                        }
+                        else if (r.ExecutionStatus == "Failed")
+                        {
+                            <span class="badge bg-danger ms-1">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>@(isAr ? "لم يُطبَّق بعد" : "Not applied yet")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark ms-1">
+                                <i class="bi bi-arrow-repeat me-1"></i>@(isAr ? "قيد التطبيق" : "Applying")
+                            </span>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                <div class="muted fs-xs" dir="ltr">
+                    @r.CreatedUtc.ToString("yyyy-MM-dd HH:mm") UTC
+                    @if (r.Status == "Pending" && r.DecisionDueUtc != null)
+                    {
+                        <span> · @(isAr ? "المهلة" : "due") @r.DecisionDueUtc.Value.ToString("yyyy-MM-dd")</span>
+                    }
+                </div>
+
+                @if (r.Status == "Approved" && r.ExecutionStatus == "Failed")
+                {
+                    <span class="muted fs-xs">
+                        @(isAr ? "اعتُمد طلبك ويُعاد تطبيقه تلقائياً — لا حاجة لإعادة الطلب."
+                               : "Your request was approved and is being retried automatically — no need to ask again.")
+                    </span>
+                }
+
+                @* Withdrawal is offered only on requests this person raised. An operator's request
+                   on their behalf is not theirs to take back. *@
+                @if (r.Status == "Pending" && r.RequestedBy == User.Identity!.Name)
+                {
+                    <form method="post" action="@Url.Action("Cancel", "Portal")" class="m-0"
+                          onsubmit="return confirm('@(isAr ? "سحب هذا الطلب؟" : "Withdraw this request?")');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@r.Id" />
+                        <button type="submit" class="btn btn-sm btn-outline-light">
+                            <i class="bi bi-slash-circle me-1"></i>@(isAr ? "سحب الطلب" : "Withdraw")
+                        </button>
+                    </form>
+                }
+                else if (r.Status == "Pending")
+                {
+                    <span class="muted fs-xs">
+                        @(isAr ? $"قدّمه {r.RequestedBy} نيابةً عنك" : $"Raised on your behalf by {r.RequestedBy}")
+                    </span>
+                }
+            </div>
+        </div>
+    }
+}

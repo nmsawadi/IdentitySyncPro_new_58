@@ -1,0 +1,83 @@
+@model IdentitySyncPro.Core.Models.Settings.SmsProvider
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "إضافة مزود SMS" : "Add SMS Provider";
+}
+
+<div class="glass-card mb-4">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <a href="@Url.Action("Index")" class="btn btn-glass btn-sm">
+            <i class="bi bi-arrow-right"></i>
+        </a>
+        <div>
+            <h6 class="fw-700 mb-1"><i class="bi bi-plus-lg me-2 text-accent"></i>@(isAr ? "إضافة مزود رسائل جديد" : "New SMS Provider")</h6>
+            <p class="text-muted fs-sm mb-0">@(isAr ? "أضف إعدادات مزود خدمة الرسائل النصية" : "Configure a new SMS service provider")</p>
+        </div>
+    </div>
+
+    <form asp-action="Create" method="post" class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label fw-600">@(isAr ? "اسم المزود" : "Provider Name") <span class="text-danger">*</span></label>
+            <input type="text" name="Name" value="@Model.Name" class="form-control bg-transparent"
+                   placeholder="@(isAr ? "مثال: مزود الرسائل الرئيسي" : "e.g., Main SMS Provider")" required>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-600">@(isAr ? "اسم المرسل" : "Sender Name")</label>
+            <input type="text" name="SenderName" value="@Model.SenderName" class="form-control bg-transparent"
+                   placeholder="@(isAr ? "اسم الجهة" : "Organization Name")">
+        </div>
+        <div class="col-md-3">
+            <div class="form-check form-switch mt-4">
+                <input class="form-check-input" type="checkbox" name="IsActive" value="true" checked id="chkActive">
+                <label class="form-check-label" for="chkActive">@(isAr ? "نشط" : "Active")</label>
+            </div>
+        </div>
+        <div class="col-12">
+            <label class="form-label fw-600">@(isAr ? "رابط API" : "API URL") <span class="text-danger">*</span></label>
+            <input type="url" name="ApiUrl" value="@Model.ApiUrl" class="form-control bg-transparent"
+                   placeholder="https://sms-api.example.com/send" required>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-600">@(isAr ? "اسم مستخدم API" : "API Username")</label>
+            <input type="text" name="ApiUsername" value="@Model.ApiUsername" class="form-control bg-transparent">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-600">@(isAr ? "كلمة مرور API" : "API Password")</label>
+            <div class="input-group">
+                <input type="password" name="ApiPassword" value="" autocomplete="new-password" class="form-control bg-transparent" id="apiPassword">
+                <button class="btn btn-glass" type="button" onclick="togglePwd()">
+                    <i class="bi bi-eye" id="pwdIcon"></i>
+                </button>
+            </div>
+        </div>
+        <partial name="_GatewayFields" model="Model" />
+
+        <div class="col-12">
+            <label class="form-label fw-600">@(isAr ? "ملاحظات" : "Notes")</label>
+            <textarea name="Notes" class="form-control bg-transparent" rows="2" placeholder="@(isAr ? "ملاحظات إضافية عن هذا المزود" : "Additional notes about this provider")">@Model.Notes</textarea>
+        </div>
+        <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-accent"><i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ" : "Save")</button>
+            <a href="@Url.Action("Index")" class="btn btn-glass">@(isAr ? "إلغاء" : "Cancel")</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+<script src="~/js/sms-presets.js"></script>
+<script>
+    function toggleField(inputId, iconId) {
+        const el = document.getElementById(inputId), icon = document.getElementById(iconId);
+        if (!el) return;
+        const show = el.type === 'password';
+        el.type = show ? 'text' : 'password';
+        if (icon) icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+    }
+    function togglePwd() { toggleField('apiPassword', 'pwdIcon'); }
+    // Hint the method when the body format implies GET (query string).
+    function onSmsBodyFormatChange() {
+        const fmt = document.getElementById('BodyFormat'), method = document.getElementById('HttpMethod');
+        if (fmt && method && fmt.value === 'Query') method.value = 'GET';
+    }
+</script>
+}

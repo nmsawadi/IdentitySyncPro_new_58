@@ -1,0 +1,100 @@
+@model IEnumerable<IdentitySyncPro.Core.Models.Sync.SyncState>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "متصفح الهويات" : "Identity Browser";
+}
+
+<div class="glass-card mb-4">
+    <form method="get" class="d-flex gap-3 align-items-end flex-wrap">
+        <div class="flex-grow-1">
+            <label class="form-label fs-xs text-muted">@(isAr ? "بحث برقم الهوية" : "Search Identity ID")</label>
+            <input type="text" name="search" value="@ViewBag.Search" class="form-control form-glass" placeholder="@(isAr ? "أدخل رقم الهوية..." : "Enter Identity ID...")" id="searchInput" />
+        </div>
+        @{
+            var idxTenants = ViewBag.Tenants as List<(int Id, string TenantName)> ?? new List<(int, string)>();
+        }
+        @if (idxTenants.Count > 1)
+        {
+            <div style="min-width:160px">
+                <label class="form-label fs-xs text-muted">@(isAr ? "الجهة" : "Tenant")</label>
+                <select name="tenantId" class="form-select form-glass">
+                    <option value="">@(isAr ? "الكل" : "All")</option>
+                    @foreach (var t in idxTenants)
+                    {
+                        <option value="@t.Id" selected="@(ViewBag.TenantId == t.Id)">@t.TenantName</option>
+                    }
+                </select>
+            </div>
+        }
+        <div style="min-width:160px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "الحالة" : "Status")</label>
+            <select name="status" class="form-select form-glass" id="statusFilter">
+                <option value="">@(isAr ? "جميع الحالات" : "All Status")</option>
+                <option value="Synced" selected="@(ViewBag.Status == "Synced")">Synced</option>
+                <option value="Failed" selected="@(ViewBag.Status == "Failed")">Failed</option>
+                <option value="Pending" selected="@(ViewBag.Status == "Pending")">Pending</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-glow" id="searchBtn"><i class="bi bi-search me-1"></i> @(isAr ? "بحث" : "Search")</button>
+    </form>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <span class="fs-sm text-muted">@(isAr ? "عرض" : "Showing") <span class="fw-600 text-accent">@Model.Count()</span> @(isAr ? "من" : "of") <span class="fw-600">@ViewBag.TotalCount</span></span>
+    <span class="fs-sm text-muted">@(isAr ? "صفحة" : "Page") @ViewBag.CurrentPage @(isAr ? "من" : "of") @ViewBag.TotalPages</span>
+</div>
+
+<div class="glass-card p-0" style="overflow:hidden">
+    @if (Model.Any())
+    {
+        <table class="table-glass">
+            <thead><tr><th>@(isAr ? "رقم الهوية" : "Identity ID")</th><th>@(isAr ? "الحالة" : "Status")</th><th>@(isAr ? "في AD" : "In AD")</th><th>@(isAr ? "آخر مزامنة" : "Last Sync")</th><th>@(isAr ? "البصمة" : "Hash")</th><th>@(isAr ? "إجراءات" : "Actions")</th></tr></thead>
+            <tbody>
+                @foreach (var identity in Model)
+                {
+                    <tr>
+                        <td><a href="@Url.Action("Details", "Identity", new { id = identity.IdentityId })" class="text-accent fw-600 text-decoration-none">@identity.IdentityId</a></td>
+                        <td><span class="badge-status @(identity.Status == "Synced" ? "badge-success" : identity.Status == "Failed" ? "badge-danger" : "badge-warning")">@identity.Status</span></td>
+                        <td>@(identity.CreatedInAD ? Html.Raw("<i class='bi bi-check-circle-fill' style='color:var(--success)'></i>") : Html.Raw("<i class='bi bi-x-circle' style='color:var(--danger)'></i>"))</td>
+                        <td class="text-muted fs-sm">@identity.LastSyncDate.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="text-muted fs-xs" style="font-family:monospace">@(identity.CurrentHash?.Substring(0, Math.Min(12, identity.CurrentHash?.Length ?? 0)))...</td>
+                        <td>
+                            <button class="btn btn-glass btn-sm" onclick="syncSingle(@identity.IdentityId)"><i class="bi bi-arrow-repeat"></i></button>
+                            <a href="@Url.Action("Details", "Identity", new { id = identity.IdentityId })" class="btn btn-glass btn-sm"><i class="bi bi-eye"></i></a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="empty-state"><i class="bi bi-search"></i><h6>@(isAr ? "لم يتم العثور على هويات" : "No identities found")</h6></div>
+    }
+</div>
+
+@{
+    var pgBase = Url.Action("Index", "Identity") + "?" +
+        (!string.IsNullOrEmpty(ViewBag.Search as string) ? $"search={ViewBag.Search}&" : "") +
+        (!string.IsNullOrEmpty(ViewBag.Status as string) ? $"status={ViewBag.Status}&" : "") +
+        "page=";
+}
+@await Html.PartialAsync("_SmartPagination", new ViewDataDictionary(ViewData) {
+    { "PgCurrent", (int)ViewBag.CurrentPage },
+    { "PgTotal", (int)ViewBag.TotalPages },
+    { "PgBaseUrl", pgBase }
+})
+
+@section Scripts {
+<script>
+    async function syncSingle(identityId) {
+        if (!confirm(isRtl ? 'مزامنة هذه الهوية؟' : `Sync identity ${identityId}?`)) return;
+        try {
+            const res = await fetch(`/Sync/SyncSingle?identityId=${identityId}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) { showToast(isRtl ? 'تمت المزامنة بنجاح' : 'Synced successfully', 'success'); setTimeout(() => location.reload(), 1500); }
+            else { showToast(data.error, 'error'); }
+        } catch (e) { showToast('Request failed', 'error'); }
+    }
+</script>
+}

@@ -1,0 +1,434 @@
+﻿@model IEnumerable<IdentitySyncPro.Core.Models.Sync.SyncRun>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "عمليات المزامنة" : "Sync Runs";
+    var activeTenants = ViewBag.ActiveTenants as List<(int Id, string TenantName)> ?? new List<(int, string)>();
+    var allTenants = ViewBag.AllTenants as List<(int Id, string TenantName, bool IsActive)> ?? new List<(int, string, bool)>();
+    var tenantNames = ViewBag.TenantNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var showTenant = tenantNames.Count > 1;
+}
+
+<!-- Sync Operations -->
+<div class="glass-card mb-4">
+    <!-- Row 1: Title + Bulk Sync Buttons -->
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+            <h6 class="fw-600 mb-1"><i class="bi bi-arrow-repeat me-2 text-accent"></i>@(isAr ? "عمليات المزامنة" : "Sync Operations")</h6>
+            <p class="fs-sm text-muted mb-0">@(isAr ? "إدارة ومراقبة عمليات مزامنة الهويات" : "Manage and monitor identity synchronization runs")</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            @* Shown whenever more than one tenant is defined. Inactive tenants are listed but
+               unselectable, so it is obvious why they cannot be synced (rather than absent). *@
+            @if (showTenant)
+            {
+                <select id="syncTenantId" class="form-select form-select-sm form-glass" style="width:auto" title="@(isAr ? "الجهة المراد مزامنتها" : "Tenant to sync")">
+                    <option value="">@(isAr ? "كل الجهات النشطة" : "All Active Tenants")</option>
+                    @foreach (var t in allTenants)
+                    {
+                        <option value="@t.Id" disabled="@(!t.IsActive)">
+                            @t.TenantName@(t.IsActive ? "" : isAr ? " (غير نشطة — فعّلها من الإعدادات)" : " (inactive — enable it in Settings)")
+                        </option>
+                    }
+                </select>
+            }
+            <button class="btn btn-glow" onclick="startSync('full')" id="btnFullSync">
+                <i class="bi bi-arrow-clockwise me-1"></i> @(isAr ? "مزامنة كاملة" : "Full Sync")
+            </button>
+            <button class="btn btn-glass" onclick="startSync('delta')" id="btnDeltaSync">
+                <i class="bi bi-lightning-charge me-1"></i> @(isAr ? "مزامنة تغييرات" : "Delta Sync")
+            </button>
+            <button class="btn btn-glass" onclick="startSync('dryrun')" id="btnDryRun" style="border-color:var(--info);color:var(--info)"
+                    title="@(isAr
+                        ? "معاينة فقط: لا يُعدَّل أي حساب في AD، ولا تُسجَّل أي حالة مزامنة. تشغيله لا يُغني عن مزامنة حقيقية بعده."
+                        : "Preview only: no AD account is modified and no sync state is recorded. It does not replace a real sync afterwards.")">
+                <i class="bi bi-eye me-1"></i> @(isAr ? "تشغيل تجريبي" : "Dry Run")
+            </button>
+            <button class="btn btn-danger-glass" onclick="cancelSync()" id="btnCancelSync" style="display:none">
+                <i class="bi bi-stop-circle me-1"></i> @(isAr ? "إلغاء" : "Cancel")
+            </button>
+            <a href="@Url.Action("Live", "Sync")" class="btn btn-glass">
+                <i class="bi bi-broadcast-pin me-1"></i> @(isAr ? "مباشر" : "Live")
+            </a>
+        </div>
+    </div>
+
+    @* Dry run reports what WOULD happen and deliberately records nothing, so its numbers are a
+       forecast — the work still has to be done by a real run. *@
+    <div class="alert alert-info d-flex align-items-start gap-2 py-2 px-3 mt-3 mb-0" style="font-size:.85rem">
+        <i class="bi bi-info-circle mt-1"></i>
+        <div>
+            <strong>@(isAr ? "التشغيل التجريبي معاينة فقط." : "Dry Run is preview only.")</strong>
+            @(isAr
+                ? "لا يُنشئ ولا يُعدّل أي حساب في AD، ولا يسجّل أي حالة مزامنة — فالأعداد التي يعرضها تقدير لما سيحدث. لتنفيذها فعلياً شغّل «مزامنة كاملة» أو «مزامنة تغييرات» بعده."
+                : "It creates and modifies nothing in AD and records no sync state — the counts it shows are a forecast. Run a Full or Delta Sync afterwards to actually apply them.")
+        </div>
+    </div>
+
+    <!-- Divider -->
+    <hr style="border-color:rgba(255,255,255,0.06);margin:12px 0">
+
+    <!-- Row 2: Single Identity Sync -->
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <span class="fs-sm fw-600" style="white-space:nowrap">
+            <i class="bi bi-person-badge me-1" style="color:var(--accent-primary)"></i>@(isAr ? "مزامنة فردية:" : "Single Sync:")
+        </span>
+        <div class="input-group" style="max-width:280px">
+            <input type="number" class="form-control form-control-sm" id="singleIdentityId" placeholder="@(isAr ? "رقم الهوية" : "Identity ID")">
+            <button class="btn btn-glow btn-sm" onclick="syncSingle(false)" title="@(isAr ? "مزامنة فعلية" : "Real sync")">
+                <i class="bi bi-arrow-repeat"></i>
+            </button>
+            <button class="btn btn-sm" onclick="syncSingle(true)" style="border:1px solid var(--info);color:var(--info)" title="@(isAr ? "تجريبي بدون تنفيذ" : "Dry run")">
+                <i class="bi bi-eye"></i>
+            </button>
+        </div>
+        <span id="singleSyncResult" class="fs-sm"></span>
+    </div>
+</div>
+
+<!-- Sync Status -->
+@if ((bool)ViewBag.IsRunning)
+{
+    <div class="glass-card mb-4" style="border-right:3px solid var(--success)">
+        <div class="d-flex align-items-center gap-3">
+            <div class="live-dot"></div>
+            <div>
+                <span class="fw-600" style="color:var(--success)">@(isAr ? "المزامنة قيد التنفيذ" : "Sync In Progress")</span>
+                <span class="text-muted fs-sm ms-2">@(isAr ? "عملية مزامنة جارية حالياً..." : "A synchronization is currently running...")</span>
+            </div>
+            <a href="@Url.Action("Live", "Sync")" class="btn btn-success-glass btn-sm ms-auto">
+                <i class="bi bi-broadcast-pin me-1"></i> @(isAr ? "عرض مباشر" : "View Live")
+            </a>
+        </div>
+    </div>
+}
+
+<!-- Filters -->
+<div class="glass-card mb-4">
+    <form method="get" class="d-flex gap-3 align-items-end flex-wrap">
+        <div style="min-width:140px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "النوع" : "Run Type")</label>
+            <select name="runType" class="form-select form-select-sm form-glass" onchange="this.form.submit()">
+                <option value="">@(isAr ? "الكل" : "All Types")</option>
+                <option value="Full" selected="@(ViewBag.RunType == "Full")">@(isAr ? "كاملة" : "Full")</option>
+                <option value="Delta" selected="@(ViewBag.RunType == "Delta")">@(isAr ? "تغييرات" : "Delta")</option>
+                <option value="DryRun" selected="@(ViewBag.RunType == "DryRun")">@(isAr ? "تجريبية" : "Dry Run")</option>
+            </select>
+        </div>
+        @if (showTenant)
+        {
+            <div style="min-width:160px">
+                <label class="form-label fs-xs text-muted">@(isAr ? "الجهة" : "Tenant")</label>
+                <select name="tenantId" class="form-select form-select-sm form-glass" onchange="this.form.submit()">
+                    <option value="">@(isAr ? "الكل" : "All")</option>
+                    @foreach (var t in tenantNames)
+                    {
+                        <option value="@t.Key" selected="@(ViewBag.TenantId == t.Key)">@t.Value</option>
+                    }
+                </select>
+            </div>
+        }
+        <div style="min-width:140px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "من تاريخ" : "Date From")</label>
+            <input type="date" name="dateFrom" class="form-control form-control-sm form-glass" value="@ViewBag.DateFrom" />
+        </div>
+        <div style="min-width:140px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "إلى تاريخ" : "Date To")</label>
+            <input type="date" name="dateTo" class="form-control form-control-sm form-glass" value="@ViewBag.DateTo" />
+        </div>
+        <button type="submit" class="btn btn-glow btn-sm">
+            <i class="bi bi-funnel me-1"></i> @(isAr ? "تصفية" : "Filter")
+        </button>
+        <a href="@Url.Action("Index", "Sync")" class="btn btn-glass btn-sm">
+            <i class="bi bi-x-lg me-1"></i> @(isAr ? "مسح" : "Clear")
+        </a>
+    </form>
+</div>
+
+<!-- Results Count -->
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <span class="fs-sm text-muted">
+        <i class="bi bi-arrow-repeat me-1"></i>
+        <span class="fw-600 text-accent">@ViewBag.TotalCount</span> @(isAr ? "عملية مزامنة" : "sync runs")
+    </span>
+    <div class="d-flex align-items-center gap-3">
+        <a href="@Url.Action("ExportRunsExcel", "Sync", new { runType = ViewBag.RunType, dateFrom = ViewBag.DateFrom, dateTo = ViewBag.DateTo, tenantId = ViewBag.TenantId })" class="btn btn-glass btn-sm d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-excel"></i>
+            @(isAr ? "تصدير Excel" : "Export Excel")
+        </a>
+        @if ((int)ViewBag.TotalPages > 1)
+        {
+            <span class="fs-sm text-muted">@(isAr ? "صفحة" : "Page") @ViewBag.CurrentPage @(isAr ? "من" : "of") @ViewBag.TotalPages</span>
+        }
+    </div>
+</div>
+
+<!-- Sync Runs Table -->
+<div class="glass-card p-0" style="overflow:hidden">
+    @if (Model.Any())
+    {
+        <table class="table-glass">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    @if (showTenant)
+                    {
+                        <th>@(isAr ? "الجهة" : "Tenant")</th>
+                    }
+                    <th>@(isAr ? "النوع" : "Type")</th>
+                    <th>@(isAr ? "الحالة" : "Status")</th>
+                    <th>@(isAr ? "البدء" : "Started")</th>
+                    <th>@(isAr ? "المدة" : "Duration")</th>
+                    <th>@(isAr ? "إنشاء" : "Created")</th>
+                    <th>@(isAr ? "تحديث" : "Updated")</th>
+                    <th>@(isAr ? "فشل" : "Failed")</th>
+                    <th>@(isAr ? "معالجة" : "Processed")</th>
+                    <th>@(isAr ? "بواسطة" : "Triggered By")</th>
+                    <th>@(isAr ? "إجراءات" : "Actions")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var run in Model)
+                {
+                    <tr>
+                        <td class="fw-600 text-accent">#@run.Id</td>
+                        @if (showTenant)
+                        {
+                            <td class="fs-sm text-muted">@(run.TenantId.HasValue && tenantNames.ContainsKey(run.TenantId.Value) ? tenantNames[run.TenantId.Value] : "—")</td>
+                        }
+                        <td>
+                            <span class="badge-status @(run.RunType == "Full" ? "badge-purple" : run.RunType == "DryRun" ? "badge-info" : "badge-muted")">
+                                <i class="bi @(run.RunType == "Full" ? "bi-arrow-clockwise" : run.RunType == "DryRun" ? "bi-eye" : "bi-lightning-charge") me-1"></i>
+                                @(isAr ? (run.RunType == "Full" ? "كاملة" : run.RunType == "DryRun" ? "تجريبية" : "تغييرات") : run.RunType)
+                            </span>
+                        </td>
+                        <td>
+                            @{
+                                var statusClass = run.Status.ToString() switch
+                                {
+                                    "Completed" => "badge-success",
+                                    "CompletedWithErrors" => "badge-warning",
+                                    "Failed" => "badge-danger",
+                                    "Running" => "badge-info",
+                                    "Cancelled" => "badge-muted",
+                                    _ => "badge-warning"
+                                };
+                            }
+                            <span class="badge-status @statusClass">@run.Status</span>
+                        </td>
+                        <td class="text-muted fs-sm">@run.StartTime.ToString("MMM dd, HH:mm:ss")</td>
+                        <td class="fs-sm">
+                            @if (run.Duration.HasValue)
+                            {
+                                <span class="text-muted">@run.Duration.Value.ToString(@"hh\:mm\:ss")</span>
+                            }
+                            else
+                            {
+                                <span class="badge-status badge-info">@(isAr ? "جارية..." : "Running...")</span>
+                            }
+                        </td>
+                        <td class="fw-600" style="color:var(--success)">@run.TotalCreated</td>
+                        <td class="fw-600" style="color:var(--warning)">@run.TotalUpdated</td>
+                        <td class="fw-600" style="color:var(--danger)">@run.TotalFailed</td>
+                        <td class="text-muted">@run.TotalProcessed</td>
+                        <td class="fs-sm">@IdentitySyncPro.Core.Models.Audit.ActorNames.Describe(run.TriggeredBy, isAr)</td>
+                        <td>
+                            <a href="@Url.Action("Details", "Sync", new { id = run.Id })" class="btn btn-glass btn-sm" title="@(isAr ? "التفاصيل" : "Details")">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @* Pagination *@
+        @await Html.PartialAsync("_SmartPagination", new ViewDataDictionary(ViewData) {
+            { "PgCurrent", (int)ViewBag.CurrentPage },
+            { "PgTotal", (int)ViewBag.TotalPages },
+            { "PgBaseUrl", Url.Action("Index", "Sync") + "?" +
+                (!string.IsNullOrEmpty(ViewBag.RunType as string) ? $"runType={ViewBag.RunType}&" : "") +
+                (!string.IsNullOrEmpty(ViewBag.DateFrom as string) ? $"dateFrom={ViewBag.DateFrom}&" : "") +
+                (!string.IsNullOrEmpty(ViewBag.DateTo as string) ? $"dateTo={ViewBag.DateTo}&" : "") +
+                "page=" }
+        })
+    }
+    else
+    {
+        <div class="empty-state">
+            <i class="bi bi-arrow-repeat"></i>
+            <h6>@(isAr ? "لا توجد عمليات مزامنة" : "No sync runs found")</h6>
+            <p class="text-muted">@(isAr ? "لا توجد نتائج تطابق الفلاتر المحددة." : "No results match the selected filters.")</p>
+            <a href="@Url.Action("Index", "Sync")" class="btn btn-glass mt-2">
+                <i class="bi bi-x-lg me-1"></i> @(isAr ? "مسح الفلاتر" : "Clear Filters")
+            </a>
+        </div>
+    }
+</div>
+
+@section Scripts {
+<script>
+    let statusInterval = null;
+
+    async function startSync(type) {
+        const labels = { full: isRtl ? 'مزامنة كاملة' : 'Full Sync', delta: isRtl ? 'مزامنة تغييرات' : 'Delta Sync', dryrun: isRtl ? 'تجريبية (بدون تنفيذ فعلي)' : 'Dry Run (no changes applied)' };
+
+        const statusRes = await fetch('/Sync/GetStatus');
+        const statusData = await statusRes.json();
+        if (statusData.isRunning) {
+            showToast(isRtl ? 'المزامنة تعمل حالياً! انتظر حتى تنتهي.' : 'Sync is already running! Please wait.', 'warning');
+            return;
+        }
+
+        const msg = isRtl ? `بدء ${labels[type]}؟` : `Start ${labels[type]}?`;
+        if (!confirm(msg)) return;
+
+        const btnFull = document.getElementById('btnFullSync');
+        const btnDelta = document.getElementById('btnDeltaSync');
+
+        btnFull.disabled = true;
+        btnFull.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + (isRtl ? 'جارٍ...' : 'Running...');
+        btnDelta.disabled = true;
+        btnDelta.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + (isRtl ? 'جارٍ...' : 'Running...');
+
+        try {
+            const urls = { full: '/Sync/StartFullSync', delta: '/Sync/StartDeltaSync', dryrun: '/Sync/StartDryRun' };
+            let url = urls[type];
+            // Optional tenant selector (visible when more than one active tenant)
+            const tenantSel = document.getElementById('syncTenantId');
+            if (tenantSel && tenantSel.value) url += `?tenantId=${tenantSel.value}`;
+            const res = await fetch(url, { method: 'POST' });
+            const data = await res.json();
+
+            if (data.success) {
+                showToast(data.message, 'success');
+                document.getElementById('btnCancelSync').style.display = '';
+                startStatusPolling();
+                setTimeout(() => location.reload(), 3000);
+            } else {
+                showToast(data.message, 'warning');
+                btnFull.disabled = false;
+                btnFull.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> @(isAr ? "مزامنة كاملة" : "Full Sync")';
+                btnDelta.disabled = false;
+                btnDelta.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> @(isAr ? "مزامنة تغييرات" : "Delta Sync")';
+            }
+        } catch (e) {
+            showToast(isRtl ? 'فشل في بدء المزامنة' : 'Failed to start sync', 'error');
+            btnFull.disabled = false;
+            btnFull.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> @(isAr ? "مزامنة كاملة" : "Full Sync")';
+            btnDelta.disabled = false;
+            btnDelta.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> @(isAr ? "مزامنة تغييرات" : "Delta Sync")';
+        }
+    }
+
+    async function cancelSync() {
+        const msg = isRtl ? 'إلغاء المزامنة الجارية؟' : 'Cancel the running sync?';
+        if (!confirm(msg)) return;
+
+        try {
+            const res = await fetch('/Sync/CancelSync', { method: 'POST' });
+            const data = await res.json();
+            showToast(data.message, 'warning');
+            setTimeout(() => location.reload(), 2000);
+        } catch (e) {
+            showToast(isRtl ? 'فشل في إلغاء المزامنة' : 'Failed to cancel sync', 'error');
+        }
+    }
+
+    function startStatusPolling() {
+        statusInterval = setInterval(async () => {
+            const res = await fetch('/Sync/GetStatus');
+            const data = await res.json();
+            if (!data.isRunning) {
+                clearInterval(statusInterval);
+                location.reload();
+            }
+        }, 5000);
+    }
+
+    @if ((bool)ViewBag.IsRunning)
+    {
+        <text>
+        document.getElementById('btnCancelSync').style.display = '';
+        startStatusPolling();
+        </text>
+    }
+
+    // Single Identity Sync
+    async function syncSingle(dryRun) {
+        const identityId = document.getElementById('singleIdentityId').value;
+        const resultEl = document.getElementById('singleSyncResult');
+
+        if (!identityId) {
+            showToast(isRtl ? 'أدخل رقم الهوية' : 'Enter identity ID', 'warning');
+            return;
+        }
+
+        resultEl.innerHTML = '<i class="bi bi-hourglass-split text-warning"></i> ' + (isRtl ? 'جاري...' : 'Processing...');
+
+        try {
+            let url = `/Sync/SyncSingle?identityId=${identityId}&dryRun=${dryRun}`;
+            const tenantSel = document.getElementById('syncTenantId');
+            if (tenantSel && tenantSel.value) url += `&tenantId=${tenantSel.value}`;
+            const res = await fetch(url, { method: 'POST' });
+            const data = await res.json();
+
+            if (data.success) {
+                const label = dryRun ? (isRtl ? '(تجريبي) ' : '(Dry) ') : '';
+                const changes = formatChangedFields(data.changedFields);
+                let lcHtml = '';
+                if (data.lifecycleAction) {
+                    lcHtml = formatChangedFields(data.lifecycleAction);
+                    lcHtml = `<div class="mt-1"><span class="badge bg-opacity-10 bg-info text-info fs-xs me-1"><i class="bi bi-recycle me-1"></i>${isRtl ? 'دورة الحياة' : 'Lifecycle'}</span></div>` + lcHtml;
+                }
+                resultEl.innerHTML = `<span style="color:var(--success)"><i class="bi bi-check-circle me-1"></i>${label}${data.operation}</span>${changes}${lcHtml}`;
+                showToast(isRtl ? 'تمت المزامنة بنجاح' : 'Sync completed', 'success');
+            } else {
+                resultEl.innerHTML = `<span style="color:var(--danger)"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
+                showToast(data.error || 'Failed', 'error');
+            }
+        } catch (e) {
+            resultEl.innerHTML = '<span style="color:var(--danger)">Error</span>';
+        }
+
+        setTimeout(() => { resultEl.innerHTML = ''; }, 12000);
+    }
+
+    function formatChangedFields(raw) {
+        if (!raw || raw === 'NoChanges') return '<span class="text-muted ms-2" style="font-size:0.8rem">— بدون تغييرات</span>';
+        if (raw === 'DryRun') return '<span class="text-muted ms-2" style="font-size:0.8rem">— تجريبي</span>';
+        if (raw === 'AlreadyExisted') return '<span class="text-muted ms-2" style="font-size:0.8rem">— موجود مسبقاً</span>';
+
+        const fields = raw.split(', ');
+        let html = '<div class="changes-container mt-2"><table class="changes-table">';
+
+        for (const field of fields) {
+            if (field.includes(': ') && field.includes('→')) {
+                const colonIdx = field.indexOf(': ');
+                const name = field.substring(0, colonIdx).trim();
+                const rest = field.substring(colonIdx + 2);
+                const arrowIdx = rest.indexOf('→');
+                let oldV = rest.substring(0, arrowIdx).trim();
+                let newV = rest.substring(arrowIdx + 1).trim();
+                if (oldV.includes('System.Byte[]')) oldV = '(binary)';
+                if (newV.includes('System.Byte[]')) newV = '(binary)';
+                const oldD = oldV.length > 35 ? oldV.substring(0, 32) + '...' : oldV;
+                const newD = newV.length > 35 ? newV.substring(0, 32) + '...' : newV;
+                html += `<tr><td class="change-field">${name}</td><td class="change-old" title="${oldV}">${oldD}</td><td class="change-arrow">→</td><td class="change-new" title="${newV}">${newD}</td></tr>`;
+            } else if (field.includes('Moved to ') || field.includes('Removed from ') || field.includes('Added to ') || field.includes('Deprovision') || field.includes('Reactivated') || field.includes('Verified')) {
+                const icon = field.includes('Moved') ? 'bi-arrow-right-circle' : field.includes('Removed') ? 'bi-x-circle' : field.includes('Added') ? 'bi-plus-circle' : field.includes('Deprovision') ? 'bi-slash-circle' : 'bi-check-circle';
+                const color = field.includes('Removed') || field.includes('Deprovision') ? 'danger' : field.includes('Moved') ? 'info' : 'success';
+                html += `<tr><td colspan="4" class="change-action"><span class="action-badge action-${color}"><i class="bi ${icon}"></i> ${field}</span></td></tr>`;
+            } else {
+                html += `<tr><td colspan="4"><span class="badge bg-opacity-10 bg-warning text-warning fs-xs">${field}</span></td></tr>`;
+            }
+        }
+        html += '</table></div>';
+        return html;
+    }
+
+    // Enter key on identity ID input
+    document.getElementById('singleIdentityId')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') syncSingle(false);
+    });
+</script>
+}

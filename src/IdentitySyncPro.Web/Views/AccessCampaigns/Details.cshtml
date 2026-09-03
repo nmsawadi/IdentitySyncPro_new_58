@@ -1,0 +1,204 @@
+@model IdentitySyncPro.Core.Models.Governance.GovCampaign
+@using IdentitySyncPro.Core.Models.Governance
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = Model.Name;
+    var items = ViewBag.Items as List<GovCampaignItem> ?? new();
+    var problem = ViewBag.Problem as string;
+
+    var total = items.Count;
+    var pending = items.Count(i => i.Decision == GovReviewDecisions.Pending);
+    var kept = items.Count(i => i.Decision == GovReviewDecisions.Keep);
+    var byReviewer = items.Count(i => i.Decision == GovReviewDecisions.Revoke && i.DecisionSource == GovDecisionSources.Reviewer);
+    var byDeadline = items.Count(i => i.DecisionSource == GovDecisionSources.AutoRevokedUndecided);
+    var failed = items.Count(i => i.ExecutionStatus == GovExecutionStatus.Failed);
+}
+
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <a href="@Url.Action("Index")" class="btn btn-glass btn-sm"><i class="bi bi-arrow-@(isAr ? "right" : "left")"></i></a>
+    <div class="flex-grow-1">
+        <h5 class="fw-700 mb-1"><i class="bi bi-clipboard-data-fill me-2 text-accent"></i>@Model.Name</h5>
+        <p class="text-muted fs-sm mb-0">
+            @Model.Status
+            @if (Model.DueUtc != null) { <span dir="ltr"> · @(isAr ? "المهلة" : "due") @Model.DueUtc?.ToString("yyyy-MM-dd HH:mm") UTC</span> }
+        </p>
+    </div>
+    @if (Model.Status == GovCampaignStatus.Draft)
+    {
+        <form method="post" action="@Url.Action("Launch")" class="m-0"
+              onsubmit="return confirm('@(isAr ? "إطلاق الحملة؟ ستُلتقط العضويات الآن، وما لا يُراجَع حتى المهلة يُسحب." : "Launch? Memberships are captured now, and anything unreviewed at the deadline is revoked.")');">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.Id" />
+            <button type="submit" class="btn btn-accent" @(problem != null ? "disabled" : "")>
+                <i class="bi bi-play-fill me-1"></i>@(isAr ? "إطلاق" : "Launch")
+            </button>
+        </form>
+    }
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (problem != null && Model.Status == GovCampaignStatus.Draft)
+{
+    <div class="alert alert-danger glass-card border-0">
+        <i class="bi bi-exclamation-octagon-fill me-2"></i><strong>@(isAr ? "لا يمكن إطلاقها" : "Cannot be launched")</strong> — @problem
+    </div>
+}
+
+@* The closing certificate. It reports the numbers nobody wants alongside the ones they do: a
+   campaign that closed without revoking anything because almost nothing was reviewed says exactly
+   that, because the report an auditor needs is the one that admits the review did not happen. *@
+@if (Model.Status == GovCampaignStatus.Closed)
+{
+    var halted = byDeadline == 0 && pending > 0;
+
+    <div class="glass-card mb-3">
+        <h6 class="fw-700 mb-3"><i class="bi bi-award me-2 text-accent"></i>@(isAr ? "شهادة الإغلاق" : "Closing certificate")</h6>
+        <div class="row g-3 text-center">
+            <div class="col"><div class="fs-4 fw-700">@total</div><div class="text-muted fs-xs">@(isAr ? "عضوية" : "memberships")</div></div>
+            <div class="col"><div class="fs-4 fw-700 text-success">@kept</div><div class="text-muted fs-xs">@(isAr ? "أُبقيت" : "kept")</div></div>
+            <div class="col"><div class="fs-4 fw-700 text-warning">@byReviewer</div><div class="text-muted fs-xs">@(isAr ? "سُحبت بقرار" : "revoked by a reviewer")</div></div>
+            <div class="col"><div class="fs-4 fw-700 text-danger">@byDeadline</div><div class="text-muted fs-xs">@(isAr ? "سُحبت لانتهاء المهلة" : "revoked at the deadline")</div></div>
+            <div class="col"><div class="fs-4 fw-700 @(pending > 0 ? "text-danger" : "")">@pending</div><div class="text-muted fs-xs">@(isAr ? "بلا قرار" : "left undecided")</div></div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ClosingNote))
+        {
+            <div class="alert @(halted ? "alert-danger" : "alert-secondary") mt-3 mb-0 fs-sm">
+                <i class="bi bi-@(halted ? "exclamation-octagon-fill" : "info-circle") me-2"></i>@Model.ClosingNote
+            </div>
+        }
+        <div class="text-muted fs-xs mt-2" dir="ltr">
+            @Model.StartedUtc?.ToString("yyyy-MM-dd HH:mm") → @Model.ClosedUtc?.ToString("yyyy-MM-dd HH:mm") UTC
+        </div>
+    </div>
+}
+
+@if (failed > 0)
+{
+    <div class="alert alert-danger glass-card border-0">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <strong>@failed</strong>
+        @(isAr ? "قرار سحب لم يصل AD بعد — يُعاد المحاولة تلقائياً كل 15 دقيقة."
+               : "revocation(s) have not reached AD — retried automatically every 15 minutes.")
+    </div>
+}
+
+@if (!items.Any())
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-hourglass fs-1 text-muted d-block mb-3"></i>
+        <p class="text-muted mb-0">
+            @(isAr ? "لم تُلتقط العضويات بعد — تُلتقط عند الإطلاق." : "No memberships captured yet — they are taken at launch.")
+        </p>
+    </div>
+}
+else
+{
+    <div class="glass-card p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>@(isAr ? "الحساب" : "Account")</th>
+                        <th>@(isAr ? "المجموعة" : "Group")</th>
+                        <th>@(isAr ? "القرار" : "Decision")</th>
+                        <th>@(isAr ? "من قرّر" : "Decided by")</th>
+                        <th>@(isAr ? "التنفيذ" : "Applied")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var i in items)
+                {
+                    <tr>
+                        <td>
+                            <span dir="ltr">@i.SubjectAccount</span>
+                            @if (!string.IsNullOrWhiteSpace(i.SubjectDisplayName))
+                            {
+                                <div class="text-muted fs-xs">@i.SubjectDisplayName</div>
+                            }
+                        </td>
+                        <td dir="ltr" class="fs-sm">@i.GroupName</td>
+                        <td>
+                            @switch (i.Decision)
+                            {
+                                case GovReviewDecisions.Keep:
+                                    <span class="badge badge-success"><i class="bi bi-check-circle me-1"></i>@(isAr ? "إبقاء" : "Keep")</span>
+                                    break;
+                                case GovReviewDecisions.Revoke:
+                                    <span class="badge badge-danger"><i class="bi bi-x-circle me-1"></i>@(isAr ? "سحب" : "Revoke")</span>
+                                    @* The distinction an auditor needs most: nobody reviewed this. *@
+                                    @if (i.DecisionSource == GovDecisionSources.AutoRevokedUndecided)
+                                    {
+                                        <div class="text-danger fs-xs mt-1">
+                                            <i class="bi bi-alarm me-1"></i>@(isAr ? "بلا مراجعة — سُحب بانتهاء المهلة" : "unreviewed — revoked at the deadline")
+                                        </div>
+                                    }
+                                    break;
+                                default:
+                                    <span class="badge badge-warning"><i class="bi bi-hourglass-split me-1"></i>@(isAr ? "بانتظار القرار" : "Pending")</span>
+                                    break;
+                            }
+                        </td>
+                        <td class="fs-xs">
+                            @if (i.DecidedBy == null)
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <div dir="ltr">@i.DecidedBy</div>
+                                @* Both names, always. "The manager decided" while the manager was
+                                   away is not a true certificate, and nothing else would reveal it. *@
+                                @if (i.DecidedOnBehalfOf != null)
+                                {
+                                    <div class="text-warning" dir="ltr">
+                                        <i class="bi bi-person-up me-1"></i>@(isAr ? "نيابةً عن" : "on behalf of") @i.DecidedOnBehalfOf
+                                    </div>
+                                }
+                                <div class="text-muted" dir="ltr">@i.DecidedUtc?.ToString("yyyy-MM-dd HH:mm")</div>
+                                @if (!string.IsNullOrWhiteSpace(i.Comment))
+                                {
+                                    <div class="text-muted">@i.Comment</div>
+                                }
+                            }
+                        </td>
+                        <td class="fs-xs">
+                            @switch (i.ExecutionStatus)
+                            {
+                                case GovExecutionStatus.Succeeded:
+                                    <span class="badge badge-success"><i class="bi bi-check-lg"></i></span>
+                                    break;
+                                case GovExecutionStatus.Failed:
+                                    <span class="badge badge-danger" title="@i.ExecutionError">
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>@(isAr ? "فشل" : "failed")
+                                    </span>
+                                    break;
+                                case GovExecutionStatus.Pending:
+                                    <span class="badge badge-warning"><i class="bi bi-arrow-repeat"></i></span>
+                                    break;
+                                default:
+                                    <span class="text-muted">—</span>
+                                    break;
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

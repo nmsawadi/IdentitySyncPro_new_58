@@ -1,0 +1,161 @@
+@model List<IdentitySyncPro.Core.Models.Governance.GovAccessRequest>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "بانتظار اعتمادي" : "Awaiting My Decision";
+    var now = DateTime.UtcNow;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h5 class="fw-700 mb-1">
+            <i class="bi bi-inbox-fill me-2 text-accent"></i>
+            @(isAr ? "بانتظار اعتمادي" : "Awaiting My Decision")
+        </h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr ? "طلبات وصول أنت مُعتمِدها — الأقرب مهلةً أولاً" : "Requests you approve — soonest deadline first")
+        </p>
+    </div>
+    <a href="@Url.Action("Index")" class="btn btn-glass">
+        <i class="bi bi-key-fill me-1"></i>@(isAr ? "طلباتي" : "My requests")
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@* Said on the screen rather than left to be discovered: the list is built from the named-approver
+   field only, because resolving every catalog item's approver group in AD on each page load would
+   put a directory round trip behind a list view. Group approvers can still decide — the check
+   happens when the decision is taken. *@
+<div class="alert alert-info glass-card border-0 fs-xs">
+    <i class="bi bi-info-circle me-2"></i>
+    @(isAr
+        ? "تعرض هذه القائمة الطلبات التي وردت فيها باسمك ضمن المُعتمِدين. إن كنت مُعتمِداً عبر عضوية مجموعة، فالاعتماد يعمل من رابط الطلب مباشرةً وإن لم يظهر هنا."
+        : "This list shows requests where you are named as an approver. If you approve by group membership, deciding still works from the request link even though it is not listed here.")
+</div>
+
+@if (!Model.Any())
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-check2-circle fs-1 text-muted d-block mb-3"></i>
+        <p class="text-muted mb-0">@(isAr ? "لا شيء بانتظار قرارك." : "Nothing is waiting on you.")</p>
+    </div>
+}
+else
+{
+    @foreach (var r in Model)
+    {
+        var overdueSoon = r.DecisionDueUtc != null && (r.DecisionDueUtc.Value - now).TotalDays <= 1;
+
+        <div class="glass-card mb-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div class="flex-grow-1">
+                    <h6 class="fw-700 mb-2">
+                        <i class="bi bi-key me-2 text-accent"></i>@(r.CatalogItem?.DisplayName ?? "—")
+                    </h6>
+
+                    <table class="table table-sm mb-0 fs-sm" style="max-width:640px">
+                        <tr>
+                            <td class="text-muted" style="width:130px">@(isAr ? "للحساب" : "For account")</td>
+                            <td>
+                                <span dir="ltr">@r.SubjectAccount</span>
+                                @if (!string.IsNullOrWhiteSpace(r.SubjectDisplayName))
+                                {
+                                    <span class="text-muted">— @r.SubjectDisplayName</span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">@(isAr ? "قدّمه" : "Raised by")</td>
+                            <td>
+                                @r.RequestedBy
+                                <span class="badge badge-secondary ms-1 fs-xs">
+                                    @(r.Channel == "Portal" ? (isAr ? "بوابة الموظف" : "Portal") : (isAr ? "الكونسول" : "Console"))
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">@(isAr ? "المجموعة" : "Group")</td>
+                            <td dir="ltr">@(r.CatalogItem?.GroupName ?? "—")</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted align-top">@(isAr ? "المبرّر" : "Justification")</td>
+                            <td>@r.Justification</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">@(isAr ? "مدة الوصول" : "Duration")</td>
+                            <td>
+                                @if ((r.CatalogItem?.AccessDurationDays ?? 0) > 0)
+                                {
+                                    <span class="badge badge-info">
+                                        <i class="bi bi-hourglass me-1"></i>
+                                        @(isAr ? $"{r.CatalogItem!.AccessDurationDays} يوماً ثم يُسحب تلقائياً"
+                                               : $"{r.CatalogItem!.AccessDurationDays} days, then revoked")
+                                    </span>
+                                }
+                                else
+                                {
+                                    @* Permanence is the fact worth pausing on, so it is stated as
+                                       plainly as the time-bound case. *@
+                                    <span class="badge badge-warning">
+                                        <i class="bi bi-infinity me-1"></i>@(isAr ? "دائم — لا يُسحب تلقائياً" : "Permanent — never auto-revoked")
+                                    </span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">@(isAr ? "مهلة القرار" : "Decision due")</td>
+                            <td>
+                                @if (r.DecisionDueUtc == null)
+                                {
+                                    <span class="text-muted">@(isAr ? "بلا مهلة" : "no deadline")</span>
+                                }
+                                else
+                                {
+                                    <span class="@(overdueSoon ? "text-danger fw-600" : "")" dir="ltr">
+                                        @r.DecisionDueUtc.Value.ToString("yyyy-MM-dd HH:mm") UTC
+                                    </span>
+                                    @if (overdueSoon)
+                                    {
+                                        <span class="badge badge-danger ms-1">
+                                            <i class="bi bi-alarm-fill me-1"></i>@(isAr ? "تنتهي خلال 24 ساعة" : "under 24h")
+                                        </span>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <form method="post" action="@Url.Action("Decide")" style="min-width:260px">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@r.Id" />
+                    <label class="form-label fs-xs">@(isAr ? "تعليق (اختياري)" : "Comment (optional)")</label>
+                    <textarea name="comment" class="form-control bg-transparent mb-2" rows="2"></textarea>
+                    <div class="d-flex gap-2">
+                        <button type="submit" name="decision" value="Approve" class="btn btn-accent flex-grow-1"
+                                onclick="return confirm('@(isAr ? "اعتماد هذا الطلب ومنح الوصول؟" : "Approve and grant this access?")');">
+                            <i class="bi bi-check-lg me-1"></i>@(isAr ? "اعتماد" : "Approve")
+                        </button>
+                        <button type="submit" name="decision" value="Reject" class="btn btn-danger-glass flex-grow-1"
+                                onclick="return confirm('@(isAr ? "رفض هذا الطلب؟" : "Reject this request?")');">
+                            <i class="bi bi-x-lg me-1"></i>@(isAr ? "رفض" : "Reject")
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+}

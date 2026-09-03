@@ -1,0 +1,52 @@
+@{
+    Layout = "_AuthLayout";
+    var isAr = (ViewBag.Lang as string ?? "ar") != "en";
+    ViewData["Title"] = isAr ? "التحقق بخطوتين" : "Two-factor verification";
+    var error = ViewBag.Error as string;
+}
+
+<h6 class="fw-bold text-center mb-1">@(isAr ? "التحقق بخطوتين" : "Two-factor verification")</h6>
+<p class="text-center text-muted fs-sm mb-3">
+    @(isAr
+        ? "أدخل الرمز المعروض في تطبيق المصادقة"
+        : "Enter the code shown in your authenticator app")
+    <br />
+    <span class="badge bg-secondary mt-2">@ViewBag.Username</span>
+</p>
+
+@if (error != null)
+{
+    <div class="alert alert-danger py-2 fs-sm">
+        <i class="bi bi-x-circle me-1"></i>
+        @(isAr ? "الرمز غير صحيح أو انتهت صلاحيته — جرّب الرمز الحالي في التطبيق."
+                : "Incorrect or expired code — try the current code in your app.")
+    </div>
+}
+
+<form method="post" action="@Url.Action("Mfa", "Account")" autocomplete="off">
+    @Html.AntiForgeryToken()
+    <div class="mb-3">
+        @* inputmode=numeric brings up the digit keypad on mobile; the field still accepts a
+           recovery code, which is alphanumeric, so the type stays text. *@
+        <input type="text" name="code" class="form-control code-input" maxlength="14"
+               inputmode="numeric" autocomplete="one-time-code" autofocus required
+               placeholder="000000" />
+    </div>
+    <button type="submit" class="btn btn-primary btn-auth w-100">
+        <i class="bi bi-check2-circle me-1"></i> @(isAr ? "تحقّق" : "Verify")
+    </button>
+</form>
+
+<div class="alert alert-secondary py-2 px-3 mt-3 mb-0 fs-sm">
+    <i class="bi bi-life-preserver me-1"></i>
+    @(isAr
+        ? "فقدت جهازك؟ أدخل أحد رموز الاسترداد التي حفظتها عند التسجيل — كل رمز يُستخدم مرة واحدة."
+        : "Lost your device? Enter one of the recovery codes you saved at enrollment — each works once.")
+</div>
+
+<form method="post" action="@Url.Action("Logout", "Account")" class="text-center mt-3">
+    @Html.AntiForgeryToken()
+    <button type="submit" class="btn btn-link btn-sm text-muted text-decoration-none">
+        <i class="bi bi-arrow-left-right me-1"></i> @(isAr ? "تسجيل الدخول بحساب آخر" : "Sign in as a different user")
+    </button>
+</form>

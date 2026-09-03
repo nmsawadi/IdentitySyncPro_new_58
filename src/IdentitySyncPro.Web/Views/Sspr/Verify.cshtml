@@ -1,0 +1,64 @@
+@{
+    Layout = "_SsprLayout";
+    var isAr = (ViewBag.SsprLang as string ?? "ar") == "ar";
+    var error = ViewBag.Error as string;
+    var expiresAt = ViewBag.ExpiresAtMs as long? ?? 0L;
+    var lifetime = ViewBag.LifetimeMs as int? ?? 300000;
+}
+<div class="text-center mb-4">
+    <div class="brand-icon" id="brandIcon"><i class="bi bi-shield-check"></i></div>
+    <h5 class="fw-bold mb-1">@(isAr ? "أدخل رمز التحقق" : "Enter Verification Code")</h5>
+    <p class="text-muted small mb-0">
+        @(isAr
+            ? "إذا تطابقت بياناتك فقد وصلك رمز مكوّن من 6 أرقام. عند إدخاله بشكل صحيح ستصلك كلمة مرور جديدة برسالة نصية."
+            : "If your details matched, a 6-digit code was sent. Once entered correctly, a new password will be sent to you by SMS.")
+    </p>
+</div>
+
+@if (error != null)
+{
+    var msg = error switch
+    {
+        "wrong_otp" => isAr ? "رمز التحقق غير صحيح" : "Incorrect verification code",
+        "expired" => isAr ? "انتهت صلاحية الرمز — ابدأ من جديد" : "The code has expired — please start again",
+        "blocked" => isAr ? "تم تجاوز عدد المحاولات — ابدأ من جديد" : "Too many attempts — please start again",
+        "ad_rejected" => isAr ? "تعذّر إعادة تعيين كلمة المرور في النظام — تواصل مع الدعم" : "Could not reset the password in the domain — contact support",
+        "sms_failed" => isAr ? "تمت إعادة التعيين لكن تعذّر إرسال الرسالة — تواصل مع الدعم" : "Reset done but the SMS failed — contact support",
+        _ => isAr ? "تعذر إتمام العملية — تحقق من الرمز أو ابدأ من جديد" : "Could not complete — check the code or start again"
+    };
+    <div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i> @msg</div>
+}
+
+<!-- Countdown -->
+<div id="ssprCountdown" data-expires="@expiresAt" data-total="@lifetime" class="mb-3"
+     data-remaining="@(isAr ? "الوقت المتبقي" : "Time remaining")"
+     data-expired="@(isAr ? "انتهت صلاحية الرمز" : "The code has expired")">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="cd-text text-muted" style="font-size:0.78rem"></span>
+        <i class="bi bi-clock-history text-muted" style="font-size:0.8rem"></i>
+    </div>
+    <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:6px;overflow:hidden">
+        <div class="cd-bar" style="height:100%;width:100%;border-radius:6px;transition:width 1s linear;background:linear-gradient(90deg,#10b981,#14b8a6)"></div>
+    </div>
+</div>
+
+<form method="post" action="@Url.Action("Verify", "Sspr")">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="rid" value="@ViewBag.RequestGuid" />
+    <input type="hidden" name="expiresAt" value="@expiresAt" />
+    <div class="mb-4">
+        <label class="form-label small text-muted">@(isAr ? "رمز التحقق" : "Verification Code")</label>
+        <input type="text" name="otp" class="form-control text-center" style="letter-spacing:8px;font-size:1.3rem"
+               maxlength="6" minlength="6" inputmode="numeric" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+               data-errmsg="@(isAr ? "أدخل الرمز المكوّن من 6 أرقام" : "Enter the 6-digit code")" autofocus required />
+    </div>
+    <button type="submit" class="btn btn-sspr w-100" id="ssprSubmit">
+        <i class="bi bi-check-lg me-1"></i> @(isAr ? "تأكيد وإرسال كلمة المرور" : "Verify & Send Password")
+    </button>
+</form>
+
+<p class="text-center mt-3 mb-0">
+    <a href="@Url.Action("Index", "Sspr")" class="text-muted" style="font-size:0.75rem">
+        @(isAr ? "لم يصلك الرمز؟ ابدأ من جديد" : "Didn't receive the code? Start over")
+    </a>
+</p>

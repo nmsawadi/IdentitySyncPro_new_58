@@ -1,0 +1,13 @@
+@{
+    Layout = "_SsprLayout";
+    var isAr = (ViewBag.SsprLang as string ?? "ar") == "ar";
+}
+<div class="text-center">
+    <div class="brand-icon" id="brandIcon"><i class="bi bi-chat-dots-fill"></i></div>
+    <h5 class="fw-bold mb-2">@(isAr ? "تم إرسال كلمة المرور الجديدة" : "New Password Sent")</h5>
+    <p class="text-muted small">
+        @(isAr
+            ? "تم إعادة تعيين كلمة المرور وإرسال كلمة المرور الجديدة إلى جوالك المسجل عبر رسالة نصية. استخدمها لتسجيل الدخول، ويُنصح بتغييرها بعد أول دخول."
+            : "Your password has been reset and the new password was sent to your registered mobile by SMS. Use it to sign in — we recommend changing it after your first login.")
+    </p>
+</div>

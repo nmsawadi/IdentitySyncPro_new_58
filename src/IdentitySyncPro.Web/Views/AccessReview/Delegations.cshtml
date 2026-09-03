@@ -1,0 +1,183 @@
+@using IdentitySyncPro.Core.Models.Governance
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "تفويض المراجعة" : "Review Delegation";
+    var given = ViewBag.Given as List<GovReviewDelegation> ?? new();
+    var received = ViewBag.Received as List<GovReviewDelegation> ?? new();
+    var now = DateTime.UtcNow;
+
+    string State(GovReviewDelegation d) =>
+        d.RevokedUtc != null ? (isAr ? "أُنهي مبكراً" : "Ended early")
+        : d.EndUtc <= now     ? (isAr ? "منتهٍ" : "Finished")
+        : d.StartUtc > now    ? (isAr ? "لم يبدأ بعد" : "Not started")
+                              : (isAr ? "ساري الآن" : "In force");
+
+    string Badge(GovReviewDelegation d) =>
+        d.RevokedUtc != null || d.EndUtc <= now ? "badge-secondary"
+        : d.StartUtc > now ? "badge-info" : "badge-success";
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h5 class="fw-700 mb-1"><i class="bi bi-person-up me-2 text-accent"></i>@(isAr ? "تفويض المراجعة" : "Review Delegation")</h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr ? "من ينوب عنك في مراجعة الصلاحيات أثناء غيابك" : "Who reviews access on your behalf while you are away")
+        </p>
+    </div>
+    <a href="@Url.Action("Index")" class="btn btn-glass">
+        <i class="bi bi-clipboard-check me-1"></i>@(isAr ? "بانتظار مراجعتي" : "Awaiting my review")
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@* Why this screen exists at all. Without it, a reviewer's holiday costs their department its
+   access — the deadline revokes everything nobody certified. *@
+<div class="alert alert-warning glass-card border-0 fs-sm">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    @(isAr
+        ? "ما لا يُراجَع حتى انتهاء مهلة الحملة يُسحب تلقائياً. فإن كنت مسافراً أو في إجازة، فوّض زميلاً قبل مغادرتك — وإلا سُحبت صلاحيات فريقك بلا أن يقرّرها أحد."
+        : "Anything left unreviewed when a campaign's deadline passes is revoked. If you will be away, delegate before you go — otherwise your team's access is taken with nobody having decided it.")
+</div>
+
+<div class="glass-card mb-3">
+    <h6 class="fw-700 mb-3"><i class="bi bi-plus-circle me-2 text-primary"></i>@(isAr ? "تفويض جديد" : "New delegation")</h6>
+    <form method="post" action="@Url.Action("Delegate")">
+        @Html.AntiForgeryToken()
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">@(isAr ? "المفوَّض إليه" : "Delegate to") <span class="text-danger">*</span></label>
+                <input type="text" name="toUsername" class="form-control bg-transparent" dir="ltr" required placeholder="deputy1" />
+                <div class="form-text">@(isAr ? "اسم دخوله في النظام" : "Their sign-in name")</div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">@(isAr ? "من تاريخ" : "From") <span class="text-danger">*</span></label>
+                <input type="datetime-local" name="startUtc" class="form-control bg-transparent" required
+                       value="@now.ToString("yyyy-MM-ddTHH:mm")" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">@(isAr ? "إلى تاريخ" : "To") <span class="text-danger">*</span></label>
+                <input type="datetime-local" name="endUtc" class="form-control bg-transparent" required
+                       value="@now.AddDays(14).ToString("yyyy-MM-ddTHH:mm")" />
+                @* Required, and this is the reason. *@
+                <div class="form-text">
+                    @(isAr ? "إلزامي — تفويض بلا نهاية نقلُ صلاحية دائم، لا تغطية إجازة."
+                           : "Required — an open-ended delegation is a permanent transfer, not holiday cover.")
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">@(isAr ? "السبب" : "Reason")</label>
+                <input type="text" name="reason" class="form-control bg-transparent"
+                       placeholder="@(isAr ? "إجازة سنوية" : "Annual leave")" />
+            </div>
+        </div>
+        <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="text-muted fs-xs">
+                @(isAr
+                    ? "التوقيت بالـ UTC. لا يمكن تفويض من فُوِّض إليك — القرار يبقى منسوباً إلى صاحب الصلاحية الأصلي واسمك معاً."
+                    : "Times are UTC. A delegation cannot be passed on again — every decision records both your name and the reviewer's.")
+            </span>
+            <button type="submit" class="btn btn-accent">
+                <i class="bi bi-check-lg me-1"></i>@(isAr ? "تفويض" : "Delegate")
+            </button>
+        </div>
+    </form>
+</div>
+
+<div class="glass-card mb-3">
+    <h6 class="fw-700 mb-3"><i class="bi bi-arrow-up-right-square me-2 text-primary"></i>@(isAr ? "فوّضتُ به" : "Delegated by me")</h6>
+    @if (!given.Any())
+    {
+        <p class="text-muted fs-sm mb-0">@(isAr ? "لم تفوّض أحداً." : "You have not delegated to anyone.")</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>@(isAr ? "إلى" : "To")</th>
+                        <th>@(isAr ? "المدة" : "Period")</th>
+                        <th>@(isAr ? "السبب" : "Reason")</th>
+                        <th>@(isAr ? "الحالة" : "State")</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var d in given)
+                {
+                    <tr>
+                        <td dir="ltr">@d.ToUsername</td>
+                        <td class="fs-xs" dir="ltr">@d.StartUtc.ToString("yyyy-MM-dd HH:mm") → @d.EndUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="fs-xs">@(string.IsNullOrWhiteSpace(d.Reason) ? "—" : d.Reason)</td>
+                        <td><span class="badge @Badge(d)">@State(d)</span></td>
+                        <td class="text-end">
+                            @* Ending early is the "came back sooner" case. Only the person who gave
+                               the authority away can take it back — a stand-in ending it would
+                               leave the reviewer covered by nobody, without their knowing. *@
+                            @if (d.RevokedUtc == null && d.EndUtc > now)
+                            {
+                                <form method="post" action="@Url.Action("EndDelegation")" class="d-inline"
+                                      onsubmit="return confirm('@(isAr ? "إنهاء هذا التفويض الآن؟" : "End this delegation now?")');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@d.Id" />
+                                    <button type="submit" class="btn btn-glass btn-sm">
+                                        <i class="bi bi-slash-circle me-1"></i>@(isAr ? "إنهاء" : "End")
+                                    </button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="glass-card">
+    <h6 class="fw-700 mb-3"><i class="bi bi-arrow-down-left-square me-2 text-primary"></i>@(isAr ? "فُوِّضتُ به" : "Delegated to me")</h6>
+    @if (!received.Any())
+    {
+        <p class="text-muted fs-sm mb-0">@(isAr ? "لا أحد فوّضك." : "Nobody has delegated to you.")</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>@(isAr ? "من" : "From")</th>
+                        <th>@(isAr ? "المدة" : "Period")</th>
+                        <th>@(isAr ? "السبب" : "Reason")</th>
+                        <th>@(isAr ? "الحالة" : "State")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var d in received)
+                {
+                    <tr>
+                        <td dir="ltr">@d.FromUsername</td>
+                        <td class="fs-xs" dir="ltr">@d.StartUtc.ToString("yyyy-MM-dd HH:mm") → @d.EndUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="fs-xs">@(string.IsNullOrWhiteSpace(d.Reason) ? "—" : d.Reason)</td>
+                        <td><span class="badge @Badge(d)">@State(d)</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

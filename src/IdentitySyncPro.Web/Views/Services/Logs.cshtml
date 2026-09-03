@@ -1,0 +1,578 @@
+﻿@model List<IdentitySyncPro.Core.Models.Services.SvcRunLog>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    var service = (IdentitySyncPro.Core.Models.Services.SvcService)ViewBag.Service;
+    ViewData["Title"] = isAr ? $"سجل التشغيل: {service.Name}" : $"Run Logs: {service.Name}";
+}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="@Url.Action("Index")" class="btn btn-glass btn-sm">
+        <i class="bi bi-arrow-@(isAr ? "right" : "left")"></i>
+    </a>
+    <div class="flex-grow-1">
+        <h5 class="fw-700 mb-0">
+            <i class="bi bi-journal-text me-2 text-warning"></i>
+            @(isAr ? "سجل التشغيل" : "Run Logs"): @service.Name
+        </h5>
+        <p class="text-muted fs-sm mb-0">@(isAr ? "جميع عمليات التشغيل لهذه الخدمة" : "All execution runs for this service")</p>
+    </div>
+    <div class="d-flex gap-2">
+        <form asp-action="RunNow" method="post" class="d-inline" id="runNowForm">
+            <input type="hidden" name="id" value="@service.Id" />
+            <button type="submit" class="btn btn-success btn-sm" id="btnRunNow" onclick="return confirm('@(isAr ? "تشغيل الخدمة الآن؟" : "Run service now?")')">
+                <i class="bi bi-play-fill me-1"></i> @(isAr ? "تشغيل" : "Run Now")
+            </button>
+        </form>
+        <a href="@Url.Action("AuditLog", new { id = service.Id })" class="btn btn-outline-info btn-sm">
+            <i class="bi bi-search me-1"></i> @(isAr ? "سجل التدقيق" : "Audit Log")
+        </a>
+        <a href="@Url.Action("Edit", new { id = service.Id })" class="btn btn-outline-accent btn-sm">
+            <i class="bi bi-pencil me-1"></i> @(isAr ? "تعديل" : "Edit")
+        </a>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- ══════════════════════════════════════ -->
+<!-- REAL-TIME PROGRESS BAR -->
+<!-- ══════════════════════════════════════ -->
+<div id="progressPanel" class="glass-card mb-4" style="display:none;">
+    <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="svc-progress-icon">
+            <i class="bi bi-arrow-repeat spin-animation"></i>
+        </div>
+        <div class="flex-grow-1">
+            <h6 class="fw-700 mb-0" id="progressTitle">
+                @(isAr ? "جاري تشغيل الخدمة..." : "Service is running...")
+            </h6>
+            <p class="text-muted fs-xs mb-0" id="progressSubtitle">
+                @(isAr ? "يتم معالجة السجلات" : "Processing records")
+            </p>
+        </div>
+        <div class="text-end">
+            <div class="fs-3 fw-800 text-gradient" id="progressPercent">0%</div>
+        </div>
+        <button type="button" class="btn btn-danger btn-sm ms-3" id="btnCancelRun" onclick="cancelService()" title="@(isAr ? "إلغاء التشغيل" : "Cancel Execution")">
+            <i class="bi bi-stop-fill me-1"></i> @(isAr ? "إلغاء" : "Cancel")
+        </button>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="progress mb-3" style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden;">
+        <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%; transition: width 0.3s ease;"
+             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>
+
+    <!-- Counters -->
+    <div class="d-flex gap-3 flex-wrap" id="progressCounters">
+        <div class="svc-progress-stat">
+            <span class="fs-xs text-muted">@(isAr ? "الحالي / الإجمالي" : "Current / Total")</span>
+            <span class="fw-700" id="progressCurrentTotal">0 / 0</span>
+        </div>
+        <div class="svc-progress-stat">
+            <span class="fs-xs text-muted">@(isAr ? "محدّث" : "Updated")</span>
+            <span class="fw-700" style="color:var(--success)" id="progressUpdated">0</span>
+        </div>
+        <div class="svc-progress-stat">
+            <span class="fs-xs text-muted">@(isAr ? "فاشل" : "Failed")</span>
+            <span class="fw-700" style="color:var(--danger)" id="progressFailed">0</span>
+        </div>
+        <div class="svc-progress-stat">
+            <span class="fs-xs text-muted">@(isAr ? "متخطّى" : "Skipped")</span>
+            <span class="fw-700 text-muted" id="progressSkipped">0</span>
+        </div>
+        <div class="svc-progress-stat">
+            <span class="fs-xs text-muted">@(isAr ? "غير موجود" : "Not Found")</span>
+            <span class="fw-700" style="color:var(--warning)" id="progressNotFound">0</span>
+        </div>
+        <div class="svc-progress-stat ms-auto">
+            <span class="fs-xs text-muted">@(isAr ? "الوقت المنقضي" : "Elapsed")</span>
+            <span class="fw-700 text-accent" id="progressElapsed">00:00</span>
+        </div>
+    </div>
+</div>
+
+@if (Model.Count == 0 && string.IsNullOrEmpty(ViewBag.StatusFilter as string) && ViewBag.DateFrom == null)
+{
+    <div class="glass-card text-center py-5">
+        <div style="font-size: 3rem; opacity: 0.3; margin-bottom: 1rem;">
+            <i class="bi bi-journal-x"></i>
+        </div>
+        <h6 class="text-muted">@(isAr ? "لا توجد عمليات تشغيل بعد" : "No runs yet")</h6>
+        <form asp-action="RunNow" method="post" class="mt-3">
+            <input type="hidden" name="id" value="@service.Id" />
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-play-fill me-1"></i> @(isAr ? "تشغيل الآن" : "Run Now")
+            </button>
+        </form>
+    </div>
+}
+else
+{
+    <!-- Filters -->
+    <div class="glass-card mb-3">
+        <form method="get" class="d-flex gap-3 align-items-end flex-wrap">
+            <input type="hidden" name="id" value="@service.Id" />
+            <div style="min-width:130px">
+                <label class="form-label fs-xs text-muted">@(isAr ? "الحالة" : "Status")</label>
+                <select name="status" class="form-select form-select-sm bg-transparent" onchange="this.form.submit()">
+                    <option value="">@(isAr ? "الكل" : "All")</option>
+                    <option value="Completed" selected="@(ViewBag.StatusFilter == "Completed")">@(isAr ? "مكتمل" : "Completed")</option>
+                    <option value="CompletedWithErrors" selected="@(ViewBag.StatusFilter == "CompletedWithErrors")">@(isAr ? "مع أخطاء" : "With Errors")</option>
+                    <option value="Failed" selected="@(ViewBag.StatusFilter == "Failed")">@(isAr ? "فشل" : "Failed")</option>
+                    <option value="Running" selected="@(ViewBag.StatusFilter == "Running")">@(isAr ? "قيد التشغيل" : "Running")</option>
+                    <option value="Cancelled" selected="@(ViewBag.StatusFilter == "Cancelled")">@(isAr ? "ملغى" : "Cancelled")</option>
+                </select>
+            </div>
+            <div style="min-width:130px">
+                <label class="form-label fs-xs text-muted">@(isAr ? "من تاريخ" : "Date From")</label>
+                <input type="date" name="dateFrom" class="form-control form-control-sm bg-transparent" value="@ViewBag.DateFrom" />
+            </div>
+            <div style="min-width:130px">
+                <label class="form-label fs-xs text-muted">@(isAr ? "إلى تاريخ" : "Date To")</label>
+                <input type="date" name="dateTo" class="form-control form-control-sm bg-transparent" value="@ViewBag.DateTo" />
+            </div>
+            <button type="submit" class="btn btn-accent btn-sm">
+                <i class="bi bi-funnel me-1"></i> @(isAr ? "تصفية" : "Filter")
+            </button>
+            <a href="@Url.Action("Logs", new { id = service.Id })" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-x-lg me-1"></i> @(isAr ? "مسح" : "Clear")
+            </a>
+            @* Same filters as the screen; exports every matching run, not the visible page. *@
+            <a href="@Url.Action("ExportLogs", new {
+                         id = service.Id,
+                         status = ViewBag.StatusFilter,
+                         dateFrom = ViewBag.DateFrom,
+                         dateTo = ViewBag.DateTo })"
+               class="btn btn-success btn-sm">
+                <i class="bi bi-file-earmark-excel me-1"></i> @(isAr ? "تصدير Excel" : "Export Excel")
+            </a>
+        </form>
+    </div>
+
+    <!-- Results Count -->
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <span class="fs-sm text-muted">
+            <span class="fw-600 text-accent">@ViewBag.TotalCount</span> @(isAr ? "عملية تشغيل" : "run logs")
+        </span>
+        @if ((int)ViewBag.TotalPages > 1)
+        {
+            <span class="fs-sm text-muted">@(isAr ? "صفحة" : "Page") @ViewBag.CurrentPage @(isAr ? "من" : "of") @ViewBag.TotalPages</span>
+        }
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="row g-3 mb-4">
+        @{
+            var totalRuns = (int)ViewBag.TotalCount;
+            var successRuns = Model.Count(r => r.Status == "Completed");
+            var failedRuns = Model.Count(r => r.Status == "Failed");
+            var totalUpdated = Model.Sum(r => r.UpdatedRecords);
+        }
+        <div class="col-md-3">
+            <div class="glass-card text-center py-3">
+                <div class="fs-xs text-muted">@(isAr ? "إجمالي العمليات" : "Total Runs")</div>
+                <div class="fs-4 fw-700 text-gradient">@totalRuns</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card text-center py-3">
+                <div class="fs-xs text-muted">@(isAr ? "ناجحة" : "Successful")</div>
+                <div class="fs-4 fw-700" style="color:var(--success)">@successRuns</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card text-center py-3">
+                <div class="fs-xs text-muted">@(isAr ? "فاشلة" : "Failed")</div>
+                <div class="fs-4 fw-700" style="color:var(--danger)">@failedRuns</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="glass-card text-center py-3">
+                <div class="fs-xs text-muted">@(isAr ? "إجمالي التحديثات" : "Total Updates")</div>
+                <div class="fs-4 fw-700 text-accent">@totalUpdated</div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.Count > 0)
+    {
+    <!-- Logs Table -->
+    <div class="glass-card">
+        <table class="table-glass">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>@(isAr ? "البدء" : "Start")</th>
+                    <th>@(isAr ? "الانتهاء" : "End")</th>
+                    <th>@(isAr ? "المدة" : "Duration")</th>
+                    <th>@(isAr ? "الحالة" : "Status")</th>
+                    <th>@(isAr ? "الإجمالي" : "Total")</th>
+                    <th>@(isAr ? "محدّث" : "Updated")</th>
+                    <th>@(isAr ? "فاشل" : "Failed")</th>
+                    <th>@(isAr ? "متخطّى" : "Skipped")</th>
+                    <th>@(isAr ? "غير موجود" : "Not Found")</th>
+                    <th>@(isAr ? "المشغّل" : "Triggered")</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var log in Model)
+                {
+                    var statusBadge = log.Status switch
+                    {
+                        "Completed" => "badge-success",
+                        "CompletedWithErrors" => "badge-warning",
+                        "Failed" => "badge-danger",
+                        "Running" => "badge-info",
+                        "Cancelled" => "badge-secondary",
+                        _ => "badge-secondary"
+                    };
+                    var statusText = log.Status switch
+                    {
+                        "Completed" => isAr ? "مكتمل" : "Completed",
+                        "CompletedWithErrors" => isAr ? "مع أخطاء" : "With Errors",
+                        "Failed" => isAr ? "فشل" : "Failed",
+                        "Running" => isAr ? "قيد التشغيل" : "Running",
+                        "Cancelled" => isAr ? "ملغى" : "Cancelled",
+                        _ => log.Status
+                    };
+                    var duration = log.EndTime.HasValue ? (log.EndTime.Value - log.StartTime) : (TimeSpan?)null;
+
+                    <tr>
+                        <td class="text-muted">@log.Id</td>
+                        <td class="fw-600 fs-sm">@log.StartTime.ToLocalTime().ToString("MM/dd HH:mm:ss")</td>
+                        <td class="fs-sm text-muted">@(log.EndTime?.ToLocalTime().ToString("HH:mm:ss") ?? "-")</td>
+                        <td class="fs-sm">@(duration?.ToString(@"mm\:ss") ?? "...")</td>
+                        <td><span class="badge-status @statusBadge">@statusText</span></td>
+                        <td class="fw-600">@log.TotalRecords</td>
+                        <td style="color:var(--success)">@log.UpdatedRecords</td>
+                        <td style="color:var(--danger)">@log.FailedRecords</td>
+                        <td class="text-muted">@log.SkippedRecords</td>
+                        <td class="text-muted">@log.NotFoundRecords</td>
+                        <td>
+                            @* A username has to be able to appear here, so this is no longer a
+                               two-state badge: automated origins get a label, a person gets a name. *@
+                            <span class="badge bg-opacity-10 @(IdentitySyncPro.Core.Models.Audit.ActorNames.IsUser(log.TriggeredBy) ? "bg-info text-info" : "bg-warning text-warning") fs-xs">
+                                @IdentitySyncPro.Core.Models.Audit.ActorNames.Describe(log.TriggeredBy, isAr)
+                            </span>
+                        </td>
+                        <td>
+                            @* Opens the service's results, newest first — this run's rows are at
+                               the top. No run-scoped link: when that scoping matched nothing the
+                               page went blank and gave the reader nothing to work with. *@
+                            <a href="@Url.Action("AuditLog", new { id = service.Id })" class="btn btn-sm btn-outline-info" title="@(isAr ? "عرض نتائج الخدمة" : "View service results")">
+                                <i class="bi bi-list-check"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    @if (!string.IsNullOrEmpty(log.ErrorMessage))
+                    {
+                        <tr>
+                            <td colspan="12" class="text-danger fs-xs ps-4">
+                                <i class="bi bi-exclamation-triangle me-1"></i> @log.ErrorMessage
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        @* Pagination *@
+        @await Html.PartialAsync("_SmartPagination", new ViewDataDictionary(ViewData) {
+            { "PgCurrent", (int)ViewBag.CurrentPage },
+            { "PgTotal", (int)ViewBag.TotalPages },
+            { "PgBaseUrl", Url.Action("Logs") + "?" + $"id={service.Id}&" +
+                (!string.IsNullOrEmpty(ViewBag.StatusFilter as string) ? $"status={ViewBag.StatusFilter}&" : "") +
+                (!string.IsNullOrEmpty(ViewBag.DateFrom as string) ? $"dateFrom={ViewBag.DateFrom}&" : "") +
+                (!string.IsNullOrEmpty(ViewBag.DateTo as string) ? $"dateTo={ViewBag.DateTo}&" : "") +
+                "page=" }
+        })
+    </div>
+    }
+    else
+    {
+        <div class="glass-card text-center py-4">
+            <i class="bi bi-funnel" style="font-size:2rem; opacity:0.3"></i>
+            <h6 class="text-muted mt-2">@(isAr ? "لا توجد نتائج تطابق الفلاتر" : "No results match the filters")</h6>
+            <a href="@Url.Action("Logs", new { id = service.Id })" class="btn btn-glass btn-sm mt-2">
+                <i class="bi bi-x-lg me-1"></i> @(isAr ? "مسح الفلاتر" : "Clear Filters")
+            </a>
+        </div>
+    }
+}
+
+@section Scripts {
+<style>
+    .svc-progress-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .svc-progress-stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 0.4rem 0.8rem;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.03);
+        min-width: 80px;
+    }
+
+    .progress-bar {
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        border-radius: 10px;
+    }
+
+    .svc-progress-icon.completed {
+        background: linear-gradient(135deg, #10b981, #059669);
+    }
+    .svc-progress-icon.completed i {
+        animation: none;
+    }
+    .svc-progress-icon.failed {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+    .svc-progress-icon.failed i {
+        animation: none;
+    }
+    .svc-progress-icon.cancelled {
+        background: linear-gradient(135deg, #6b7280, #4b5563);
+    }
+    .svc-progress-icon.cancelled i {
+        animation: none;
+    }
+
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .spin-animation {
+        animation: spin 1.5s linear infinite;
+    }
+</style>
+
+<script>
+(function () {
+    const serviceId = @service.Id;
+    const isAr = @(isAr ? "true" : "false");
+    const progressPanel = document.getElementById('progressPanel');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressCurrentTotal = document.getElementById('progressCurrentTotal');
+    const progressUpdated = document.getElementById('progressUpdated');
+    const progressFailed = document.getElementById('progressFailed');
+    const progressSkipped = document.getElementById('progressSkipped');
+    const progressNotFound = document.getElementById('progressNotFound');
+    const progressTitle = document.getElementById('progressTitle');
+    const progressElapsed = document.getElementById('progressElapsed');
+    const progressIcon = document.querySelector('.svc-progress-icon');
+
+    let startTime = null;
+    let elapsedTimer = null;
+    let pollingInterval = null;
+    let connected = false;
+
+    // ═══ SignalR Connection ═══
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl('/hubs/sync')
+        .withAutomaticReconnect([0, 2000, 5000, 10000])
+        .build();
+
+    connection.on('SvcProgress', function (data) {
+        if (data.serviceId !== serviceId) return;
+        updateProgress(data);
+    });
+
+    connection.onreconnected(() => {
+        connection.invoke('JoinSvcMonitor', serviceId).catch(() => {});
+    });
+
+    async function startSignalR() {
+        try {
+            await connection.start();
+            await connection.invoke('JoinSvcMonitor', serviceId);
+            connected = true;
+            console.log('SignalR connected for service', serviceId);
+        } catch (err) {
+            console.warn('SignalR failed, falling back to polling:', err);
+            startPolling();
+        }
+    }
+
+    // ═══ Polling Fallback ═══
+    function startPolling() {
+        if (pollingInterval) return;
+        pollingInterval = setInterval(async () => {
+            try {
+                const resp = await fetch(`@Url.Action("GetRunStatus")?id=${serviceId}`);
+                const data = await resp.json();
+                if (data.running) {
+                    showProgress();
+                    updateProgress({
+                        serviceId: serviceId,
+                        current: data.updated + data.failed + data.skipped + data.notFound,
+                        total: data.total,
+                        percent: data.total > 0 ? Math.round(((data.updated + data.failed + data.skipped + data.notFound) / data.total) * 100) : 0,
+                        updated: data.updated,
+                        failed: data.failed,
+                        skipped: data.skipped,
+                        notFound: data.notFound,
+                        status: 'Running'
+                    });
+                } else if (progressPanel.style.display !== 'none' && data.status && data.status !== 'Running') {
+                    updateProgress({
+                        serviceId: serviceId,
+                        current: data.total,
+                        total: data.total,
+                        percent: 100,
+                        updated: data.updated,
+                        failed: data.failed,
+                        skipped: data.skipped,
+                        notFound: data.notFound,
+                        status: data.status
+                    });
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+            } catch (e) { /* ignore polling errors */ }
+        }, 3000);
+    }
+
+    // ═══ Progress UI Updates ═══
+    function showProgress() {
+        progressPanel.style.display = 'block';
+        if (!startTime) {
+            startTime = new Date();
+            elapsedTimer = setInterval(updateElapsed, 1000);
+        }
+    }
+
+    function updateProgress(data) {
+        showProgress();
+
+        const pct = data.percent || 0;
+        progressBar.style.width = pct + '%';
+        progressPercent.textContent = pct + '%';
+        progressCurrentTotal.textContent = `${(data.current || 0).toLocaleString()} / ${(data.total || 0).toLocaleString()}`;
+        progressUpdated.textContent = (data.updated || 0).toLocaleString();
+        progressFailed.textContent = (data.failed || 0).toLocaleString();
+        progressSkipped.textContent = (data.skipped || 0).toLocaleString();
+        progressNotFound.textContent = (data.notFound || 0).toLocaleString();
+
+        // Handle completion / cancellation
+        if (data.status && data.status !== 'Running') {
+            if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+
+            // Hide cancel button
+            var cancelBtn = document.getElementById('btnCancelRun');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+
+            if (data.status === 'Completed') {
+                progressTitle.textContent = isAr ? '✅ اكتملت العملية بنجاح!' : '✅ Completed successfully!';
+                progressIcon.className = 'svc-progress-icon completed';
+                progressIcon.innerHTML = '<i class="bi bi-check-lg"></i>';
+                progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+            } else if (data.status === 'CompletedWithErrors') {
+                progressTitle.textContent = isAr ? '⚠️ اكتملت مع بعض الأخطاء' : '⚠️ Completed with some errors';
+                progressIcon.className = 'svc-progress-icon completed';
+                progressIcon.innerHTML = '<i class="bi bi-exclamation-triangle"></i>';
+                progressBar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
+            } else if (data.status === 'Failed') {
+                progressTitle.textContent = isAr ? '❌ فشلت العملية' : '❌ Execution failed';
+                progressIcon.className = 'svc-progress-icon failed';
+                progressIcon.innerHTML = '<i class="bi bi-x-lg"></i>';
+                progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+            } else if (data.status === 'Cancelled') {
+                progressTitle.textContent = isAr ? '🛑 تم إلغاء العملية' : '🛑 Execution cancelled';
+                progressIcon.className = 'svc-progress-icon cancelled';
+                progressIcon.innerHTML = '<i class="bi bi-stop-fill"></i>';
+                progressBar.style.background = 'linear-gradient(90deg, #6b7280, #4b5563)';
+            }
+
+            // Auto-reload page after 3 seconds to show updated logs
+            setTimeout(() => { location.reload(); }, 3000);
+        }
+    }
+
+    function updateElapsed() {
+        if (!startTime) return;
+        const elapsed = Math.floor((new Date() - startTime) / 1000);
+        const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const secs = (elapsed % 60).toString().padStart(2, '0');
+        progressElapsed.textContent = `${mins}:${secs}`;
+    }
+
+    // ═══ Initialization ═══
+    // Check if a service is currently running
+    async function checkInitialStatus() {
+        try {
+            const resp = await fetch(`@Url.Action("GetRunStatus")?id=${serviceId}`);
+            const data = await resp.json();
+            if (data.running) {
+                showProgress();
+                startTime = new Date(data.startTime);
+                updateElapsed();
+                if (!connected) startPolling();
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    startSignalR();
+    checkInitialStatus();
+
+    // ═══ Cancel Service Function ═══
+    window.cancelService = async function () {
+        const cancelBtn = document.getElementById('btnCancelRun');
+        const confirmMsg = isAr ? 'هل أنت متأكد من إلغاء تشغيل الخدمة؟' : 'Are you sure you want to cancel the service execution?';
+
+        if (!confirm(confirmMsg)) return;
+
+        cancelBtn.disabled = true;
+        cancelBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>' + (isAr ? 'جاري الإلغاء...' : 'Cancelling...');
+
+        try {
+            const resp = await fetch(`@Url.Action("CancelRun")?id=${serviceId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await resp.json();
+            if (result.success) {
+                progressTitle.textContent = isAr ? '🛑 جاري إلغاء العملية...' : '🛑 Cancelling...';
+            } else {
+                alert(result.message);
+                cancelBtn.disabled = false;
+                cancelBtn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>' + (isAr ? 'إلغاء' : 'Cancel');
+            }
+        } catch (e) {
+            alert(isAr ? 'حدث خطأ أثناء الإلغاء' : 'Error during cancellation');
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>' + (isAr ? 'إلغاء' : 'Cancel');
+        }
+    };
+})();
+</script>
+}

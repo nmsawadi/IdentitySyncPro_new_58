@@ -1,0 +1,220 @@
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "صحة النظام" : "System Health";
+    var components = ViewBag.Components as List<IdentitySyncPro.Core.Models.Resilience.ComponentHealth> ?? new();
+    var quarantined = ViewBag.Quarantined as List<IdentitySyncPro.Core.Models.Resilience.QuarantinedIdentity> ?? new();
+    var deadLetters = ViewBag.DeadLetters as List<IdentitySyncPro.Core.Models.Resilience.DeadLetterEntry> ?? new();
+}
+
+<!-- Stats Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                @{
+                    var hasOpen = components.Any(c => c.CircuitOpen);
+                    var allHealthy = components.All(c => c.Status == "Healthy");
+                }
+                <i class="bi @(hasOpen ? "bi-exclamation-triangle-fill text-danger" : allHealthy || !components.Any() ? "bi-check-circle-fill text-success" : "bi-exclamation-circle-fill text-warning") fs-1"></i>
+                <h5 class="mt-2 mb-0">@(hasOpen ? (isAr ? "متدهور" : "Degraded") : allHealthy || !components.Any() ? (isAr ? "سليم" : "Healthy") : (isAr ? "تحذير" : "Warning"))</h5>
+                <small class="text-muted">@(isAr ? "الحالة العامة" : "Overall Status")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <i class="bi bi-cpu-fill text-info fs-3"></i>
+                <h3 class="mb-0 mt-2">@components.Count</h3>
+                <small class="text-muted">@(isAr ? "المكونات" : "Components")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <i class="bi bi-shield-exclamation text-warning fs-3"></i>
+                <h3 class="mb-0 mt-2">@ViewBag.QuarantinedCount</h3>
+                <small class="text-muted">@(isAr ? "محجور" : "Quarantined")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass-card border-0 h-100">
+            <div class="card-body text-center p-3">
+                <i class="bi bi-mailbox text-danger fs-3"></i>
+                <h3 class="mb-0 mt-2">@ViewBag.DeadLetterPending</h3>
+                <small class="text-muted">@(isAr ? "رسائل معلقة" : "Dead Letters")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Component Health -->
+    <div class="col-lg-4">
+        <div class="card glass-card border-0">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>@(isAr ? "صحة المكونات" : "Component Health")</h5>
+            </div>
+            <div class="card-body p-0">
+                @if (!components.Any())
+                {
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-check-circle fs-1 text-success"></i>
+                        <p class="mt-2">@(isAr ? "لم يتم رصد أي مشاكل" : "No issues detected")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var c in components)
+                        {
+                            var statusIcon = c.Status switch {
+                                "Healthy" => "bi-check-circle-fill text-success",
+                                "Degraded" => "bi-exclamation-circle-fill text-warning",
+                                _ => "bi-x-circle-fill text-danger"
+                            };
+                            <div class="list-group-item bg-transparent">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi @statusIcon"></i>
+                                    <strong class="flex-grow-1">@c.Name</strong>
+                                    @if (c.CircuitOpen)
+                                    {
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-lightning-fill me-1"></i>@(isAr ? "مفتوح" : "OPEN")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-@(c.ConsecutiveFailures > 0 ? "warning text-dark" : "success")">@c.Status</span>
+                                    }
+                                </div>
+                                @if (c.ConsecutiveFailures > 0)
+                                {
+                                    <small class="text-muted d-block mt-1">
+                                        @(isAr ? "فشل متتالي:" : "Consecutive failures:") @c.ConsecutiveFailures
+                                    </small>
+                                }
+                                @if (!string.IsNullOrEmpty(c.Details))
+                                {
+                                    <small class="text-danger d-block mt-1" style="font-family:monospace;font-size:0.7rem">@c.Details</small>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Quarantined Identities -->
+    <div class="col-lg-4">
+        <div class="card glass-card border-0">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0"><i class="bi bi-shield-exclamation me-2"></i>@(isAr ? "الهويات المحجورة" : "Quarantined")</h5>
+                <span class="badge bg-warning text-dark">@quarantined.Count</span>
+            </div>
+            <div class="card-body p-0" style="max-height:400px;overflow-y:auto">
+                @if (!quarantined.Any())
+                {
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-shield-check fs-1 text-success"></i>
+                        <p class="mt-2">@(isAr ? "لا توجد هويات محجورة" : "No quarantined identities")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var q in quarantined)
+                        {
+                            <div class="list-group-item bg-transparent">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <code>@q.IdentityId</code>
+                                        <span class="badge bg-danger ms-1">@q.FailureCount @(isAr ? "فشل" : "fails")</span>
+                                        <br><small class="text-muted">@q.Reason</small>
+                                        @if (!string.IsNullOrEmpty(q.LastError))
+                                        {
+                                            <br><small class="text-danger" style="font-size:0.7rem">@q.LastError</small>
+                                        }
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-success" onclick="resolveQuarantine(@q.Id)">
+                                        <i class="bi bi-check-lg"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">@q.QuarantinedDate.ToString("MM/dd HH:mm")</small>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Dead Letter Queue -->
+    <div class="col-lg-4">
+        <div class="card glass-card border-0">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0"><i class="bi bi-mailbox me-2"></i>@(isAr ? "قائمة الانتظار" : "Dead Letter Queue")</h5>
+                <span class="badge bg-danger">@deadLetters.Count</span>
+            </div>
+            <div class="card-body p-0" style="max-height:400px;overflow-y:auto">
+                @if (!deadLetters.Any())
+                {
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-mailbox fs-1 text-success"></i>
+                        <p class="mt-2">@(isAr ? "لا توجد عمليات معلقة" : "No pending operations")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var dl in deadLetters)
+                        {
+                            <div class="list-group-item bg-transparent">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <code>@dl.IdentityId</code>
+                                        <span class="badge bg-secondary ms-1">@dl.OperationType</span>
+                                        <span class="badge bg-info ms-1">×@dl.RetryCount</span>
+                                        <br><small class="text-danger" style="font-size:0.7rem">@dl.ErrorMessage</small>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="replayDeadLetter(@dl.Id)">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">@dl.FailedDate.ToString("MM/dd HH:mm")</small>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    async function resolveQuarantine(id) {
+        const notes = prompt(isRtl ? 'ملاحظات الحل:' : 'Resolution notes:');
+        const res = await fetch(`@Url.Action("ResolveQuarantine")?id=${id}&notes=${encodeURIComponent(notes||'')}`, { method: 'POST' });
+        if (res.ok) location.reload();
+    }
+
+    async function replayDeadLetter(id) {
+        if (!confirm(isRtl ? 'إعادة تشغيل هذه العملية؟' : 'Replay this operation?')) return;
+        const res = await fetch(`@Url.Action("ReplayDeadLetter")?id=${id}`, { method: 'POST' });
+        if (res.ok) location.reload();
+    }
+
+    // Auto-refresh health status every 30 seconds
+    setInterval(async () => {
+        try {
+            const res = await fetch('@Url.Action("Status")');
+            const data = await res.json();
+            // Could update UI dynamically here
+        } catch {}
+    }, 30000);
+</script>
+}

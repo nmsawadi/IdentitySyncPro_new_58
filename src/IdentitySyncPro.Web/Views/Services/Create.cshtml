@@ -1,0 +1,1210 @@
+﻿@model IdentitySyncPro.Core.Models.Services.SvcService
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "إنشاء خدمة جديدة" : "Create New Service";
+}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="@Url.Action("Index")" class="btn btn-glass btn-sm">
+        <i class="bi bi-arrow-@(isAr ? "right" : "left")"></i>
+    </a>
+    <div>
+        <h5 class="fw-700 mb-0">
+            <i class="bi bi-plus-circle-fill me-2 text-accent"></i>
+            @(isAr ? "إنشاء خدمة جديدة" : "Create New Service")
+        </h5>
+        <p class="text-muted fs-sm mb-0">@(isAr ? "أنشئ خدمة مزامنة من قاعدة البيانات إلى Active Directory" : "Set up a new database-to-AD sync service")</p>
+    </div>
+</div>
+
+<form asp-action="Create" method="post" id="createForm">
+    @Html.AntiForgeryToken()
+
+    <!-- Wizard Steps -->
+    <div class="wizard-steps mb-4">
+        <div class="wizard-step active" data-step="1">
+            <div class="wizard-step-number">1</div>
+            <span>@(isAr ? "معلومات الخدمة" : "Service Info")</span>
+        </div>
+        <div class="wizard-step" data-step="2">
+            <div class="wizard-step-number">2</div>
+            <span>@(isAr ? "قاعدة البيانات" : "Database")</span>
+        </div>
+        <div class="wizard-step" data-step="3">
+            <div class="wizard-step-number">3</div>
+            <span>@(isAr ? "Active Directory" : "Active Directory")</span>
+        </div>
+        <div class="wizard-step" data-step="4">
+            <div class="wizard-step-number">4</div>
+            <span>@(isAr ? "الجدولة" : "Schedule")</span>
+        </div>
+    </div>
+
+    <!-- Step 1: Service Info -->
+    <div class="wizard-panel active" id="step1">
+        <div class="glass-card">
+            <h6 class="fw-700 mb-3">
+                <i class="bi bi-info-circle-fill me-2 text-accent"></i>
+                @(isAr ? "معلومات الخدمة" : "Service Information")
+            </h6>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">@(isAr ? "اسم الخدمة" : "Service Name") <span class="text-danger">*</span></label>
+                    <input type="text" name="Name" class="form-control bg-transparent" value="@Model.Name"
+                           placeholder="@(isAr ? "مثال: مزامنة بيانات الموظفين" : "e.g., Employee Data Sync")" required />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">@(isAr ? "نوع الخدمة" : "Service Type") <span class="text-danger">*</span></label>
+                    <select name="ServiceType" class="form-select bg-transparent" id="serviceType">
+                        <option value="Sync">@(isAr ? "🔄 مزامنة بيانات" : "🔄 Data Sync")</option>
+                        <option value="Offboarding">@(isAr ? "🚫 إخلاء طرف" : "🚫 Offboarding")</option>
+                        <option value="EmptyAttrDisable">@(isAr ? "⛔ تعطيل ناقصي البيانات" : "⛔ Empty-Attribute Disable")</option>
+                        <option value="InactiveDisable">@(isAr ? "🕒 تعطيل الحسابات غير المستخدمة" : "🕒 Inactive-Account Disable")</option>
+                        <option value="AdAudit">@(isAr ? "🛡️ تدقيق / تقارير AD" : "🛡️ AD Audit / Reports")</option>
+                        <option value="ExpiryDisable">@(isAr ? "📅 تنبيه انتهاء الحسابات ثم تعطيل" : "📅 Expiry Warning + Disable")</option>
+                        <option value="OrphanCleanup">@(isAr ? "👻 الحسابات اليتيمة (بلا مصدر)" : "👻 Orphaned Accounts (no source)")</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">@(isAr ? "الحالة" : "Status")</label>
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="IsEnabled" value="true" checked id="chkEnabled">
+                        <input type="hidden" name="IsEnabled" value="false" />
+                        <label class="form-check-label" for="chkEnabled">@(isAr ? "مفعّلة" : "Enabled")</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">@(isAr ? "الوصف" : "Description")</label>
+                    <textarea name="Description" class="form-control bg-transparent" rows="2"
+                              placeholder="@(isAr ? "وصف اختياري للخدمة" : "Optional description")">@Model.Description</textarea>
+                </div>
+            </div>
+
+            <!-- Offboarding-specific fields -->
+            <div id="offboardingFields" style="display:none">
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3">
+                    <i class="bi bi-person-x-fill me-2 text-danger"></i>
+                    @(isAr ? "إعدادات إخلاء الطرف" : "Offboarding Settings")
+                </h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "عمود الحالة" : "Status Column") <span class="text-danger">*</span></label>
+                        <input type="text" name="StatusColumn" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: STATUS" : "e.g., STATUS")" />
+                        <div class="form-text">@(isAr ? "العمود الذي يحدد حالة الموظف" : "Column that determines employee status")</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "قيمة غير الفعّال" : "Inactive Value") <span class="text-danger">*</span></label>
+                        <input type="text" name="StatusValue" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: Inactive" : "e.g., Inactive")" />
+                        <div class="form-text">@(isAr ? "القيمة التي تعني إخلاء الطرف" : "Value that triggers offboarding")</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "أعمدة اسم الموظف" : "Employee Name Columns")</label>
+                        <input type="text" name="EmployeeNameColumn" class="form-control bg-transparent"
+                               placeholder="FirstName,SecondName,ThirdName,FamilyName" />
+                        <div class="form-text">@(isAr ? "يمكن كتابة عدة أعمدة مفصولة بفاصلة لتكوين الاسم الكامل" : "Comma-separated columns to form full name")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدف للنقل" : "Target OU for Move") <span class="text-danger">*</span></label>
+                        <input type="text" name="TargetOU" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: OU=EndedContracts,DC=company,DC=com" : "e.g., OU=EndedContracts,DC=company,DC=com")" />
+                        <div class="form-text">@(isAr ? "الـ OU الذي سيُنقل إليه الحساب بعد التعطيل" : "OU where disabled accounts will be moved")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "OU البحث عن المستخدمين" : "Search OU (Offboarding)")</label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: OU=Employees,DC=company,DC=com" : "e.g., OU=Employees,DC=company,DC=com")" />
+                        <div class="form-text">@(isAr ? "الـ OU المحددة للبحث عن المستخدمين. اتركه فارغاً للبحث في Base DN بالكامل" : "Specific OU to search for users. Leave empty to search entire Base DN")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "مجموعة الاستثناء (لا يُخلى طرف أعضائها)" : "Exclusion Group (members are exempt)")</label>
+                        <input type="text" name="OffboardingExclusionGroup" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: OffboardingExempt — اسم المجموعة أو DN كامل" : "e.g., OffboardingExempt — group name or full DN")" />
+                        <div class="form-text">@(isAr ? "أي مستخدم عضو في هذه المجموعة (ولو عبر مجموعات متداخلة) لن يُطبَّق عليه إخلاء الطرف. اتركه فارغاً لتعطيل الاستثناء" : "Any member of this group (including nested groups) is exempt from offboarding. Leave empty to disable")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3">
+                    <i class="bi bi-chat-dots-fill me-2 text-success"></i>
+                    @(isAr ? "إشعار SMS" : "SMS Notification")
+                </h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableSms" value="true" id="chkSms">
+                            <label class="form-check-label" for="chkSms">@(isAr ? "تفعيل إرسال SMS" : "Enable SMS")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4" id="phoneColGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "خاصية AD لرقم الجوال" : "AD Phone Attribute")</label>
+                        <input type="text" name="PhoneColumn" class="form-control bg-transparent" value="extensionAttribute13"
+                               placeholder="extensionAttribute13" />
+                        <div class="form-text">@(isAr ? "خاصية Active Directory التي تحتوي رقم الجوال" : "AD attribute that stores the mobile number")</div>
+                    </div>
+                    <div class="col-md-4" id="smsProviderGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "مزود SMS" : "SMS Provider")</label>
+                        <select name="SmsProviderId" class="form-select bg-transparent" id="smsProviderSelect">
+                            <option value="">@(isAr ? "-- اختر مزوداً --" : "-- Select provider --")</option>
+                        </select>
+                        <div class="form-text">
+                            @(isAr ? "أضف مزودين من" : "Add providers from ")
+                            <a href="@Url.Action("Index", "SmsCenter")" target="_blank">@(isAr ? "مركز الإشعارات" : "Notifications Center")</a>
+                        </div>
+                    </div>
+                    <div class="col-12" id="smsTemplateGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "قالب الرسالة" : "SMS Template")</label>
+                        <textarea name="SmsTemplate" class="form-control bg-transparent" rows="2"
+                                  placeholder="@(isAr ? "عزيزي {EMPLOYEE_NAME}، تم إخلاء طرفك برقم {EMPLOYEE_ID}" : "Dear {EMPLOYEE_NAME}, your account {EMPLOYEE_ID} has been offboarded")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {EMPLOYEE_NAME}, {EMPLOYEE_ID}, {SAM_ACCOUNT}" : "Variables: {EMPLOYEE_NAME}, {EMPLOYEE_ID}, {SAM_ACCOUNT}")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3">
+                    <i class="bi bi-envelope-fill me-2 text-primary"></i>
+                    @(isAr ? "إشعار البريد الإلكتروني (للإدارة)" : "Email Notification (Admin)")
+                </h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" id="chkEmail">
+                            <label class="form-check-label" for="chkEmail">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5" id="emailToGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email") <span class="text-danger">*</span></label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "admin@company.com; hr@company.com" : "admin@company.com; hr@company.com")" />
+                        <div class="form-text">@(isAr ? "يدعم عدة عناوين مفصولة بـ ;" : "Multiple addresses separated by ;")</div>
+                    </div>
+                    <div class="col-md-12" id="emailSubjectGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "إخلاء طرف: {EMPLOYEE_NAME} - {EMPLOYEE_ID}" : "Offboarding: {EMPLOYEE_NAME} - {EMPLOYEE_ID}")" />
+                    </div>
+                    <div class="col-12" id="emailBodyGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="4"
+                                  placeholder="@(isAr ? "اتركه فارغاً لاستخدام القالب الافتراضي" : "Leave empty to use default template")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {EMPLOYEE_NAME}, {EMPLOYEE_ID}, {SAM_ACCOUNT}, {DEPARTMENT}, {JOB_TITLE}" : "Variables: {EMPLOYEE_NAME}, {EMPLOYEE_ID}, {SAM_ACCOUNT}, {DEPARTMENT}, {JOB_TITLE}")</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty-Attribute Disable fields -->
+            <div id="emptyAttrFields" style="display:none">
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3">
+                    <i class="bi bi-person-fill-slash me-2 text-warning"></i>
+                    @(isAr ? "إعدادات تعطيل ناقصي البيانات" : "Empty-Attribute Disable Settings")
+                </h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "السمات المطلوب فحصها" : "Attributes to Check") <span class="text-danger">*</span></label>
+                        <input type="text" name="EmptyCheckAttributes" class="form-control bg-transparent"
+                               placeholder="extensionAttribute2, mobile, department" />
+                        <div class="form-text">@(isAr ? "سمات AD مفصولة بفاصلة — أي حساب مفعّل تكون إحدى هذه السمات فارغة فيه سيُعطَّل في مكانه (بدون نقل)" : "Comma-separated AD attributes — any enabled account with one of them empty gets disabled in place (no move)")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة للفحص" : "OU to Scan")</label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: OU=Employees,DC=company,DC=com" : "e.g., OU=Employees,DC=company,DC=com")" />
+                        <div class="form-text">@(isAr ? "تُفحص كل الحسابات داخل هذه الـ OU وفروعها. اتركه فارغاً لفحص Base DN بالكامل" : "All accounts inside this OU (and sub-OUs) are scanned. Leave empty to scan the entire Base DN")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3">
+                    <i class="bi bi-envelope-fill me-2 text-primary"></i>
+                    @(isAr ? "إشعار البريد الإلكتروني (سبب التعطيل)" : "Email Notification (disable reason)")
+                </h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" id="chkEmailEmpty">
+                            <label class="form-check-label" for="chkEmailEmpty">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent"
+                               placeholder="admin@company.com; hr@company.com" />
+                        <div class="form-text">@(isAr ? "يدعم عدة عناوين مفصولة بـ ;" : "Multiple addresses separated by ;")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "تعطيل حساب لنقص بيانات: {SAM_ACCOUNT}" : "Account disabled (missing data): {SAM_ACCOUNT}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="4"
+                                  placeholder="@(isAr ? "اتركه فارغاً لاستخدام القالب الافتراضي" : "Leave empty to use default template")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {EMPLOYEE_NAME}, {SAM_ACCOUNT}, {EMPTY_ATTRIBUTES}, {DN}" : "Variables: {EMPLOYEE_NAME}, {SAM_ACCOUNT}, {EMPTY_ATTRIBUTES}, {DN}")</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inactive-Account Disable fields -->
+            <div id="inactiveFields" style="display:none">
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3">
+                    <i class="bi bi-clock-history me-2 text-danger"></i>
+                    @(isAr ? "إعدادات تعطيل الحسابات غير المستخدمة" : "Inactive-Account Disable Settings")
+                </h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "عدد أشهر عدم الاستخدام" : "Inactivity (months)") <span class="text-danger">*</span></label>
+                        <input type="number" name="InactivityMonths" class="form-control bg-transparent" value="6" min="1" max="120" />
+                        <div class="form-text">@(isAr ? "أي حساب مفعّل لم يُستخدم منذ هذه المدة يُعطَّل في مكانه" : "Enabled accounts unused for this long get disabled in place")</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "سمة آخر تسجيل دخول" : "Last-logon attribute")</label>
+                        <input type="text" name="LastLogonAttribute" class="form-control bg-transparent" value="lastLogonTimestamp" placeholder="lastLogonTimestamp" />
+                        <div class="form-text">@(isAr ? "افتراضي lastLogonTimestamp — عند غيابه يُعتمد تاريخ الإنشاء (whenCreated)" : "Default lastLogonTimestamp — falls back to whenCreated when absent")</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة للفحص" : "OU to Scan") <span class="text-danger">*</span></label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: OU=Employees,DC=company,DC=com" : "e.g., OU=Employees,DC=company,DC=com")" />
+                        <div class="form-text text-warning">@(isAr ? "مطلوب — يجب تحديد OU (لا يُسمح بفحص الدومين كاملاً لأن العملية تعطّل حسابات)" : "Required — must target a specific OU (a domain-wide inactivity sweep is not allowed)")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-chat-dots-fill me-2 text-success"></i>@(isAr ? "إشعار SMS للمستخدم" : "SMS to the user")</h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableSms" value="true" id="chkSmsInactive">
+                            <label class="form-check-label" for="chkSmsInactive">@(isAr ? "تفعيل إرسال SMS للمستخدم" : "Enable SMS to the user")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "خاصية AD لرقم الجوال" : "AD Phone Attribute")</label>
+                        <input type="text" name="PhoneColumn" class="form-control bg-transparent" value="mobile" placeholder="mobile" />
+                        <div class="form-text">@(isAr ? "خاصية AD التي تحتوي رقم جوال المستخدم" : "AD attribute holding the user's mobile number")</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "مزود SMS" : "SMS Provider")</label>
+                        <select name="SmsProviderId" class="form-select bg-transparent" id="smsProviderSelectInactive">
+                            <option value="">@(isAr ? "-- اختر مزوداً --" : "-- Select provider --")</option>
+                        </select>
+                        <div class="form-text"><a href="@Url.Action("Index", "SmsCenter")" target="_blank">@(isAr ? "مركز الإشعارات" : "Notifications Center")</a></div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "قالب الرسالة" : "SMS Template")</label>
+                        <textarea name="SmsTemplate" class="form-control bg-transparent" rows="2"
+                                  placeholder="@(isAr ? "تم تعطيل حسابك {SAM_ACCOUNT} لعدم الاستخدام منذ {INACTIVE_MONTHS} شهراً. للتفعيل راجع الدعم." : "Your account {SAM_ACCOUNT} was disabled after {INACTIVE_MONTHS} months of inactivity. Contact support to reactivate.")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {SAM_ACCOUNT}, {DISPLAY_NAME}, {INACTIVE_MONTHS}" : "Variables: {SAM_ACCOUNT}, {DISPLAY_NAME}, {INACTIVE_MONTHS}")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i>@(isAr ? "إشعار البريد للإدارة (ملخّص)" : "Email to administration (summary)")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" id="chkEmailInactive">
+                            <label class="form-check-label" for="chkEmailInactive">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" placeholder="admin@company.com; it@company.com" />
+                        <div class="form-text">@(isAr ? "بريد واحد ملخّص يُرسل في نهاية التشغيل بكل الحسابات المعطّلة. يدعم عدة عناوين بـ ;" : "One summary email at the end listing every disabled account. Multiple addresses separated by ;")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "تعطيل حسابات غير مستخدمة: {COUNT}" : "Inactive accounts disabled: {COUNT}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="4"
+                                  placeholder="@(isAr ? "اتركه فارغاً لاستخدام القالب الافتراضي (جدول بالحسابات)" : "Leave empty to use the default template (table of accounts)")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {COUNT}, {INACTIVE_MONTHS}, {ROWS} (صفوف جدول الحسابات)" : "Variables: {COUNT}, {INACTIVE_MONTHS}, {ROWS} (account table rows)")</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AD Audit / Report fields -->
+            <div id="auditFields" style="display:none">
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-shield-check me-2 text-primary"></i>@(isAr ? "إعدادات تدقيق / تقارير AD" : "AD Audit / Report Settings")</h6>
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "نوع التقرير" : "Report type") <span class="text-danger">*</span></label>
+                        <select name="ReportType" id="reportType" class="form-select bg-transparent" onchange="onReportTypeChange()">
+                            <option value="PrivilegedGroups">@(isAr ? "المجموعات الإدارية (+ تنبيه التغييرات)" : "Privileged groups (+ change alerts)")</option>
+                            <option value="PasswordNeverExpires">@(isAr ? "كلمة المرور لا تنتهي" : "Password never expires")</option>
+                            <option value="DuplicateAccounts">@(isAr ? "الحسابات المكرّرة" : "Duplicate accounts")</option>
+                            <option value="LockedAccounts">@(isAr ? "الحسابات المقفلة" : "Locked accounts")</option>
+                            <option value="AccessCertification">@(isAr ? "شهادة الوصول (عضوية المجموعات)" : "Access certification (group membership)")</option>
+                            <option value="NonHumanInventory">@(isAr ? "🤖 جرد الحسابات غير البشرية (حسابات الخدمة)" : "🤖 Non-human account inventory (service accounts)")</option>
+                        </select>
+                        <div class="form-text">@(isAr ? "النتائج تُسجَّل في سجلّ التدقيق (بتصدير Excel) + بريد ملخّص. كل التقارير قراءة فقط، إلا إذا اخترت «إزالة» أدناه." : "Findings go to the audit log (with Excel export) + a summary email. Every report is read-only unless you choose \"Remove\" below.")</div>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة (اختياري)" : "OU to Scan (optional)")</label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "فارغ = فحص Base DN بالكامل" : "empty = scan the entire Base DN")" />
+                    </div>
+
+                    <div class="col-12" id="auditGroupsGroup">
+                        <label class="form-label">@(isAr ? "المجموعات المطلوب تدقيقها (مفصولة بفاصلة)" : "Groups to audit (comma-separated)")</label>
+                        <input type="text" name="AuditGroups" class="form-control bg-transparent"
+                               placeholder="Domain Admins, Enterprise Admins, Administrators" />
+                        <div class="form-text">@(isAr ? "اسم المجموعة أو DN كامل. للمجموعات الإدارية: فارغ = المجموعات المعروفة افتراضياً. في AD المُعرَّب استخدم الأسماء المحلية." : "Group name or full DN. For privileged groups, empty = well-known defaults. On localized AD use the local names.")</div>
+                        @* For the inventory this field means something else: not what to list, but what counts as privileged when cross-checking the accounts found. *@
+                        <div class="form-text text-warning" id="nhiGroupsHint" style="display:none">
+                            @(isAr
+                                ? "في تقرير الجرد: هذه هي المجموعات التي تُعتبر «إدارية» عند فحص الحسابات غير البشرية. فارغ = الافتراضيات الإنجليزية المعروفة (وفي AD مُعرَّب لن تُوجد، فيظهر تنبيه في التقرير بدل تعليم أي حساب)."
+                                : "For the inventory this is what counts as privileged when cross-checking the accounts found. Empty = the well-known English defaults, which do not exist on a localized AD — the report then says so instead of flagging nothing.")
+                        </div>
+                    </div>
+                    <div class="col-md-5" id="duplicateAttrGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "السمة المطلوب كشف تكرارها" : "Attribute to check for duplicates")</label>
+                        <input type="text" name="DuplicateAttribute" class="form-control bg-transparent" value="employeeID" placeholder="employeeID / mail" />
+                        <div class="form-text">@(isAr ? "الحسابات التي تشترك في نفس قيمة هذه السمة تُعتبر مكرّرة" : "Accounts sharing the same value of this attribute are flagged as duplicates")</div>
+                    </div>
+
+                    @* Report vs. remove — the only AdAudit mode that writes to AD. *@
+                    <div class="col-12" id="pwdActionGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "الإجراء على «كلمة المرور لا تنتهي»" : "Action on \"password never expires\"")</label>
+                        <select name="PwdNeverExpiresAction" id="pwdNeverExpiresAction" class="form-select bg-transparent" onchange="onPwdActionChange()">
+                            <option value="Report">@(isAr ? "تقرير فقط (لا يعدّل AD)" : "Report only (does not modify AD)")</option>
+                            <option value="Remove">@(isAr ? "إزالة العلم فعلياً من الحسابات" : "Actually remove the flag from accounts")</option>
+                        </select>
+                        <div class="form-text">
+                            @(isAr
+                                ? "«تقرير فقط» يسرد الحسابات دون تغيير. «إزالة» تُلغي علم DONT_EXPIRE_PASSWORD فتبدأ كلمات المرور بالانتهاء وفق سياسة الدومين."
+                                : "\"Report only\" lists the accounts without changing them. \"Remove\" clears the DONT_EXPIRE_PASSWORD flag, so those passwords begin expiring under the domain policy.")
+                        </div>
+                        <div id="pwdRemoveWarning" class="alert alert-warning py-2 px-3 mt-2 fs-xs mb-0" style="display:none">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                            @(isAr
+                                ? "تحذير: حسابات الخدمة تعتمد غالباً على كلمة مرور دائمة، وستتوقّف عند أول انتهاء. الإزالة تتطلّب تحديد OU (لا يُسمح بالدومين كاملاً)، وتحترم مجموعة الاستثناء. شغّل «تقرير فقط» أولاً وراجع القائمة."
+                                : "Warning: service accounts often depend on a non-expiring password and will stop working at the first expiry. Removal requires a Search OU (the whole domain is refused) and honours the exclusion group. Run \"Report only\" first and review the list.")
+                        </div>
+                    </div>
+
+                    <div class="col-12" id="pwdExclusionGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "مجموعة الاستثناء من الإزالة (اختياري)" : "Exclusion group for removal (optional)")</label>
+                        <input type="text" name="OffboardingExclusionGroup" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "اسم مجموعة أو DN — أعضاؤها لا يُمسّون" : "Group name or DN — its members are left untouched")" />
+                        <div class="form-text">
+                            @(isAr
+                                ? "تشمل العضوية المتداخلة. مجموعة غير موجودة = إيقاف الخدمة بالكامل (حماية من الخطأ الإملائي)."
+                                : "Nested membership included. A group that does not exist aborts the run entirely (protection against a typo).")
+                        </div>
+                    </div>
+
+                    @* ── Non-human account inventory ──
+                       Every rule below is empty by default and there is no built-in naming
+                       convention: what counts as a service account is institutional policy, and a
+                       default guessed here would produce a confident, wrong number at the next
+                       installation. A service with no rule at all refuses to run. *@
+                    <div class="col-12" id="nhiGroup" style="display:none">
+                        <hr class="my-3 opacity-10">
+                        <h6 class="fw-700 mb-2"><i class="bi bi-robot me-2 text-info"></i>@(isAr ? "تعريف الحساب غير البشري" : "What counts as a non-human account")</h6>
+                        <div class="alert alert-info py-2 px-3 fs-xs">
+                            <i class="bi bi-info-circle me-1"></i>
+                            @(isAr
+                                ? "التقرير قراءة فقط دائماً — لا يعطّل ولا ينقل ولا يعدّل أي حساب. لا يوجد اصطلاح تسمية مبني في النظام: اضبط إشارة واحدة على الأقل، وإلا توقّفت الخدمة برسالة واضحة بدل أن تُخرج تقريراً فارغاً يبدو كأنه «لا توجد حسابات خدمة»."
+                                : "This report is always read-only — it never disables, moves, or modifies an account. No naming convention is built in: configure at least one signal, or the run stops with a clear message rather than producing an empty report that reads as \"there are no service accounts\".")
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "أنماط الأسماء" : "Name patterns")</label>
+                                <input type="text" name="NhiNamePatterns" class="form-control bg-transparent" placeholder="svc_*, sa-*, *_bot, app*" />
+                                <div class="form-text">@(isAr ? "مفصولة بفاصلة، و* حرف بدل. تُطابَق على sAMAccountName." : "Comma-separated; * is a wildcard. Matched against sAMAccountName.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "وضع المطابقة بين الإشارات" : "How signals combine")</label>
+                                <select name="NhiMatchMode" class="form-select bg-transparent">
+                                    <option value="Any">@(isAr ? "أيّ إشارة تكفي (Any) — الأوسع" : "Any signal is enough — broadest")</option>
+                                    <option value="All">@(isAr ? "يجب تحقّق كل الإشارات (All) — الأضيق" : "All signals must hold — narrowest")</option>
+                                </select>
+                                <div class="form-text">@(isAr ? "«كلها» يفيد للتضييق، مثل: اسمه svc_* وليس مُداراً بالمزامنة." : "\"All\" is for narrowing, e.g. named svc_* AND not managed by sync.")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "الـ OUs التي حساباتها غير بشرية" : "OUs whose accounts are non-human")</label>
+                                <input type="text" name="NhiOUs" class="form-control bg-transparent" placeholder="OU=ServiceAccounts,DC=example,DC=com" />
+                                <div class="form-text">@(isAr ? "DN كامل، مفصولة بفاصلة. يجب أن تقع داخل نطاق الفحص أعلاه، وOU غير موجودة توقف التشغيلة." : "Full DNs, comma-separated. Must sit inside the scan scope above; an OU that does not exist aborts the run.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "مجموعات تدلّ على أن الحساب غير بشري" : "Groups that mark an account as non-human")</label>
+                                <input type="text" name="NhiGroups" class="form-control bg-transparent" placeholder="Service Accounts, App Identities" />
+                                <div class="form-text">@(isAr ? "اسم أو DN، وتشمل العضوية المتداخلة. مجموعة غير موجودة توقف التشغيلة (فالجرد الناقص يقرأ كأنه دومين نظيف)." : "Name or DN; nested membership included. A group that does not exist aborts the run — an undercount reads as a clean domain.")</div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">@(isAr ? "قواعد سمة = قيمة" : "Attribute = value rules")</label>
+                                <input type="text" name="NhiAttributeRules" class="form-control bg-transparent" placeholder="employeeType=service, extensionAttribute5=svc" />
+                                <div class="form-text">@(isAr ? "مفصولة بفاصلة. صيغة خاطئة توقف التشغيلة بدل أن تُتخطّى بصمت." : "Comma-separated. A malformed rule aborts the run instead of being silently skipped.")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiFlagHasSpn" value="true" id="nhiSpn" />
+                                    <input type="hidden" name="NhiFlagHasSpn" value="false" />
+                                    <label class="form-check-label" for="nhiSpn">@(isAr ? "يحمل servicePrincipalName" : "Carries a servicePrincipalName")</label>
+                                </div>
+                                <div class="form-text">@(isAr ? "حساب مستخدم بـ SPN هو حساب خدمة بحكم التعريف — أقوى إشارة محايدة." : "A user account with an SPN is a service account by definition — the strongest vendor-neutral signal.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiIncludeManagedServiceAccounts" value="true" id="nhiGmsa" checked />
+                                    <input type="hidden" name="NhiIncludeManagedServiceAccounts" value="false" />
+                                    <label class="form-check-label" for="nhiGmsa">@(isAr ? "تضمين حسابات الخدمة المُدارة (gMSA/MSA)" : "Include managed service accounts (gMSA/MSA)")</label>
+                                </div>
+                                <div class="form-text">@(isAr ? "غير بشرية بحكم التعريف، فتُضاف دائماً مهما كان وضع المطابقة." : "Non-human by definition, so they are always added whatever the match mode says.")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiFlagPwdNeverExpires" value="true" id="nhiPwd" />
+                                    <input type="hidden" name="NhiFlagPwdNeverExpires" value="false" />
+                                    <label class="form-check-label" for="nhiPwd">@(isAr ? "كلمة مروره لا تنتهي" : "Password never expires")</label>
+                                </div>
+                                <div class="form-text">@(isAr ? "إشارة عملية قوية، لكنها في وضع «أيّ منها» تجرّ حسابات بشرية عليها نفس العلم." : "A strong practical signal, but under \"Any\" it also pulls in human accounts carrying the same flag.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="NhiFlagNoKeyAttribute" value="true" id="nhiNoKey" />
+                                    <input type="hidden" name="NhiFlagNoKeyAttribute" value="false" />
+                                    <label class="form-check-label" for="nhiNoKey">@(isAr ? "لا يحمل سمة المفتاح (خارج إدارة المزامنة)" : "Has no key attribute (outside sync management)")</label>
+                                </div>
+                                <div class="form-text text-warning">@(isAr ? "واسعة جداً وحدها في وضع «أيّ منها»: تشمل كل حساب بشري غير مُدار. استخدمها في وضع «كلها» كشرط تضييق." : "Very broad on its own under \"Any\" — it includes every unmanaged human account. Use it under \"All\" as a narrowing condition.")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "عمر الاعتماد الذي يُعتبر بعده قديماً (أيام)" : "Credential is stale after (days)")</label>
+                                <input type="number" name="NhiCredentialMaxAgeDays" class="form-control bg-transparent" value="365" min="0" />
+                                <div class="form-text">@(isAr ? "0 = تعطيل الفحص. يُقاس من pwdLastSet." : "0 disables the check. Measured from pwdLastSet.")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@(isAr ? "مدة الخمول (أيام)" : "Dormant after (days)")</label>
+                                <input type="number" name="NhiDormantDays" class="form-control bg-transparent" value="180" min="0" />
+                                <div class="form-text">@(isAr ? "0 = تعطيل الفحص. يُقرأ النشاط من سمة آخر دخول، وعند غيابها من whenCreated." : "0 disables the check. Activity is read from the last-logon attribute, falling back to whenCreated.")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i>@(isAr ? "إشعار البريد بالتقرير" : "Email the report")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" id="chkEmailAudit">
+                            <label class="form-check-label" for="chkEmailAudit">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" placeholder="security@company.com; it@company.com" />
+                        <div class="form-text">@(isAr ? "يدعم عدة عناوين مفصولة بـ ;" : "Multiple addresses separated by ;")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "تقرير تدقيق AD — {REPORT}: {COUNT}" : "AD audit report — {REPORT}: {COUNT}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="3"
+                                  placeholder="@(isAr ? "اتركه فارغاً للقالب الافتراضي (جدول النتائج)" : "Leave empty to use the default template (findings table)")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {REPORT}, {COUNT}, {ROWS}, {MORE}" : "Variables: {REPORT}, {COUNT}, {ROWS}, {MORE}")</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expiry Warning / Disable fields -->
+            <div id="expiryFields" style="display:none">
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-calendar-x me-2 text-danger"></i>@(isAr ? "إعدادات تنبيه الانتهاء والتعطيل" : "Expiry Warning / Disable Settings")</h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "سمة تاريخ الانتهاء" : "Expiry attribute")</label>
+                        <input type="text" name="ExpiryAttribute" class="form-control bg-transparent" value="accountExpires" placeholder="accountExpires" />
+                        <div class="form-text">@(isAr ? "افتراضي accountExpires. تقبل سمة مخصّصة بتاريخ/FILETIME" : "Default accountExpires. Accepts a custom date/FILETIME attribute")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "أيام التنبيه قبل الانتهاء" : "Warning days before expiry")</label>
+                        <input type="text" name="ExpiryWarnDays" class="form-control bg-transparent" value="30,7,1" placeholder="30,7,1" />
+                        <div class="form-text">@(isAr ? "قائمة مفصولة بفاصلة — يُنصح بتشغيل يومي" : "Comma-separated milestones — run daily")</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة للفحص" : "OU to Scan") <span class="text-danger">*</span></label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: OU=Contractors,DC=company,DC=com" : "e.g., OU=Contractors,DC=company,DC=com")" />
+                        <div class="form-text text-warning">@(isAr ? "مطلوب — يجب تحديد OU (العملية تعطّل حسابات بعد الانتهاء)" : "Required — the service disables accounts after expiry")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-chat-dots-fill me-2 text-success"></i>@(isAr ? "إشعار SMS للمستخدم" : "SMS to the user")</h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableSms" value="true" id="chkSmsExpiry">
+                            <label class="form-check-label" for="chkSmsExpiry">@(isAr ? "تفعيل إرسال SMS للمستخدم (تحذير + تعطيل)" : "Enable SMS to the user (warning + disable)")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "خاصية AD لرقم الجوال" : "AD Phone Attribute")</label>
+                        <input type="text" name="PhoneColumn" class="form-control bg-transparent" value="mobile" placeholder="mobile" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "مزود SMS" : "SMS Provider")</label>
+                        <select name="SmsProviderId" class="form-select bg-transparent" id="smsProviderSelectExpiry">
+                            <option value="">@(isAr ? "-- اختر مزوداً --" : "-- Select provider --")</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "قالب الرسالة" : "SMS Template")</label>
+                        <textarea name="SmsTemplate" class="form-control bg-transparent" rows="2"
+                                  placeholder="@(isAr ? "عزيزي، ينتهي حسابك {SAM_ACCOUNT} خلال {DAYS} يوم بتاريخ {EXPIRY_DATE}. راجع الدعم للتجديد." : "Your account {SAM_ACCOUNT} expires in {DAYS} days on {EXPIRY_DATE}. Contact support to renew.")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {SAM_ACCOUNT}, {DISPLAY_NAME}, {DAYS}, {EXPIRY_DATE} (DAYS=0 عند التعطيل)" : "Variables: {SAM_ACCOUNT}, {DISPLAY_NAME}, {DAYS}, {EXPIRY_DATE} (DAYS=0 on disable)")</div>
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i>@(isAr ? "إشعار البريد للإدارة (ملخّص)" : "Email to administration (summary)")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" id="chkEmailExpiry">
+                            <label class="form-check-label" for="chkEmailExpiry">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" placeholder="admin@company.com; it@company.com" />
+                        <div class="form-text">@(isAr ? "بريد ملخّص بجدولين: تنبيهات + تعطيل. يدعم عدة عناوين بـ ;" : "One summary email (warnings + disables). Multiple addresses separated by ;")</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "تنبيه انتهاء — تحذير: {WARNED} / تعطيل: {DISABLED}" : "Expiry — warned: {WARNED} / disabled: {DISABLED}")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="3"
+                                  placeholder="@(isAr ? "اتركه فارغاً للقالب الافتراضي" : "Leave empty to use default template")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {WARNED}, {DISABLED}, {WARN_TABLE}, {DISABLE_TABLE}" : "Variables: {WARNED}, {DISABLED}, {WARN_TABLE}, {DISABLE_TABLE}")</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Orphaned-Account fields -->
+            <div id="orphanFields" style="display:none">
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-person-dash me-2 text-danger"></i>@(isAr ? "إعدادات الحسابات اليتيمة" : "Orphaned-Account Settings")</h6>
+                <div class="alert alert-info py-2 px-3 fs-xs">
+                    <i class="bi bi-info-circle me-1"></i>@(isAr
+                        ? "يقرأ مفاتيح المصدر (الخطوة التالية: قاعدة البيانات + عمود المفتاح) ويطابقها بحسابات AD. أي حساب في AD يحمل سمة المفتاح لكن مفتاحه غير موجود في المصدر = يتيم."
+                        : "Reads source keys (next step: source DB + key column) and matches them against AD. An AD account that carries the key attribute but whose key is missing from the source = orphan.")}
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">@(isAr ? "الإجراء" : "Action") <span class="text-danger">*</span></label>
+                        <select name="OrphanAction" id="orphanAction" class="form-select bg-transparent" onchange="onOrphanActionChange()">
+                            <option value="Report">@(isAr ? "تقرير فقط (موصى به للبداية)" : "Report only (recommended first)")</option>
+                            <option value="Disable">@(isAr ? "تعطيل في المكان" : "Disable in place")</option>
+                            <option value="DisableAndMove">@(isAr ? "تعطيل + نقل لـ OU حجر" : "Disable + move to quarantine OU")</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">@(isAr ? "حدّ أمان المصدر" : "Source safety min")</label>
+                        <input type="number" name="MinSourceRecords" class="form-control bg-transparent" value="1" min="1" />
+                        <div class="form-text">@(isAr ? "توقّف بلا إجراء إن رجع المصدر أقل من هذا العدد (يمنع التعطيل الجماعي)" : "Abort if the source returns fewer than this (prevents mass-disable)")</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "الـ OU المستهدفة للفحص" : "OU to Scan") <span class="text-danger">*</span></label>
+                        <input type="text" name="OffboardingSearchOU" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "مثال: OU=Users,DC=company,DC=com" : "e.g., OU=Users,DC=company,DC=com")" />
+                        <div class="form-text text-warning">@(isAr ? "مطلوب — يجب أن تكون OU التي تديرها المزامنة" : "Required — the OU that sync manages")</div>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label">@(isAr ? "مجموعة الاستثناء" : "Exclusion group")</label>
+                        <input type="text" name="OffboardingExclusionGroup" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "break-glass / حسابات الخدمة — اسم أو DN" : "break-glass / service accounts — name or DN")" />
+                        <div class="form-text">@(isAr ? "أعضاؤها (والمتداخلون) لا يُعتبرون يتامى. مجموعة غير موجودة = توقّف الخدمة (حماية)." : "Members (incl. nested) are never treated as orphans. A missing group aborts the run (safety).")</div>
+                    </div>
+                    <div class="col-md-5" id="quarantineOuGroup" style="display:none">
+                        <label class="form-label">@(isAr ? "OU الحجر (للنقل)" : "Quarantine OU (for move)") <span class="text-danger">*</span></label>
+                        <input type="text" name="TargetOU" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "OU=Orphaned,DC=company,DC=com" : "OU=Orphaned,DC=company,DC=com")" />
+                    </div>
+                </div>
+
+                <hr class="my-4 opacity-10">
+                <h6 class="fw-700 mb-3"><i class="bi bi-envelope-fill me-2 text-primary"></i>@(isAr ? "إشعار البريد للإدارة" : "Email to administration")</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" name="EnableEmailNotification" value="true" id="chkEmailOrphan">
+                            <label class="form-check-label" for="chkEmailOrphan">@(isAr ? "تفعيل إشعار البريد" : "Enable Email")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">@(isAr ? "البريد الإلكتروني" : "Notification Email")</label>
+                        <input type="text" name="NotificationEmail" class="form-control bg-transparent" placeholder="security@company.com; it@company.com" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "عنوان البريد" : "Email Subject")</label>
+                        <input type="text" name="EmailSubject" class="form-control bg-transparent"
+                               placeholder="@(isAr ? "الحسابات اليتيمة — {COUNT} ({ACTION})" : "Orphaned accounts — {COUNT} ({ACTION})")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@(isAr ? "محتوى البريد (HTML)" : "Email Body (HTML)")</label>
+                        <textarea name="EmailBodyTemplate" class="form-control bg-transparent" rows="3"
+                                  placeholder="@(isAr ? "اتركه فارغاً للقالب الافتراضي (جدول الحسابات)" : "Leave empty to use default template (accounts table)")"></textarea>
+                        <div class="form-text">@(isAr ? "المتغيرات: {COUNT}, {ACTION}, {ROWS}" : "Variables: {COUNT}, {ACTION}, {ROWS}")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Database Connection -->
+    <div class="wizard-panel" id="step2">
+        <div class="glass-card">
+            <h6 class="fw-700 mb-3">
+                <i class="bi bi-database-fill me-2 text-info"></i>
+                @(isAr ? "اتصال قاعدة البيانات المصدر" : "Source Database Connection")
+            </h6>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">@(isAr ? "نوع قاعدة البيانات" : "Database Provider") <span class="text-danger">*</span></label>
+                    <select name="SourceProvider" class="form-select bg-transparent" id="sourceProvider">
+                        <option value="SqlServer" selected>SQL Server</option>
+                        <option value="Oracle">Oracle</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">@(isAr ? "عنوان الخادم" : "Host / Server") <span class="text-danger">*</span></label>
+                    <input type="text" name="SourceHost" class="form-control bg-transparent" id="srcHost"
+                           placeholder="@(isAr ? "مثال: 192.168.1.100" : "e.g., 192.168.1.100")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">@(isAr ? "المنفذ" : "Port")</label>
+                    <input type="number" name="SourcePort" class="form-control bg-transparent" id="srcPort" value="1433" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" id="lblDatabase">@(isAr ? "اسم قاعدة البيانات" : "Database Name")</label>
+                    <input type="text" name="SourceDatabase" class="form-control bg-transparent" id="srcDatabase" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">@(isAr ? "اسم المستخدم" : "Username")</label>
+                    <input type="text" name="SourceUsername" class="form-control bg-transparent" id="srcUsername" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">@(isAr ? "كلمة المرور" : "Password")</label>
+                    <input type="password" name="SourcePassword" class="form-control bg-transparent" id="srcPassword" />
+                </div>
+                <div class="col-md-4" id="integratedSecurityGroup">
+                    <div class="form-check form-switch mt-4">
+                        <input class="form-check-input" type="checkbox" name="SourceIntegratedSecurity" value="true" id="chkIntegrated">
+                        <label class="form-check-label" for="chkIntegrated">@(isAr ? "مصادقة Windows" : "Windows Auth")</label>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">@(isAr ? "اسم الفيو / الجدول" : "View / Table Name") <span class="text-danger">*</span></label>
+                    <input type="text" name="SourceTableOrView" class="form-control bg-transparent" id="srcView"
+                           placeholder="@(isAr ? "مثال: V_EMPLOYEES" : "e.g., V_EMPLOYEES")" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-outline-info w-100" id="btnTestSrc">
+                        <i class="bi bi-plug-fill me-1"></i> @(isAr ? "اختبار الاتصال" : "Test Connection")
+                    </button>
+                </div>
+            </div>
+            <div id="srcTestResult" class="mt-2"></div>
+
+            <hr class="my-4 opacity-10">
+
+            <!-- Key Column Selection -->
+            <h6 class="fw-700 mb-3">
+                <i class="bi bi-key-fill me-2 text-warning"></i>
+                @(isAr ? "عمود المفتاح (للبحث في AD)" : "Key Column (for AD lookup)")
+            </h6>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">@(isAr ? "عمود المفتاح في المصدر" : "Source Key Column") <span class="text-danger">*</span></label>
+                    <input type="text" name="KeySourceColumn" class="form-control bg-transparent" id="keyColumn"
+                           placeholder="@(isAr ? "مثال: EMPLOYEE_ID" : "e.g., EMPLOYEE_ID")" />
+                    <div class="form-text">@(isAr ? "العمود المستخدم للبحث عن المستخدم في AD" : "Column used to find the user in AD")</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">@(isAr ? "خاصية البحث في AD" : "AD Search Attribute") <span class="text-danger">*</span></label>
+                    <input type="text" name="ADSearchAttribute" class="form-control bg-transparent"
+                           value="extensionAttribute2"
+                           placeholder="extensionAttribute2" />
+                    <div class="form-text">@(isAr ? "قيمة عمود المفتاح ستُبحث في هذه الخاصية" : "Key column value will be searched in this attribute")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: AD Connection -->
+    <div class="wizard-panel" id="step3">
+        <div class="glass-card">
+            <h6 class="fw-700 mb-3">
+                <i class="bi bi-diagram-3-fill me-2 text-accent"></i>
+                @(isAr ? "اتصال Active Directory" : "Active Directory Connection")
+            </h6>
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">@(isAr ? "عنوان خادم AD" : "AD Server") <span class="text-danger">*</span></label>
+                    <input type="text" name="ADServer" class="form-control bg-transparent" id="adServer"
+                           placeholder="@(isAr ? "مثال: dc01.domain.com" : "e.g., dc01.domain.com")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">@(isAr ? "المنفذ" : "Port")</label>
+                    <input type="number" name="ADPort" class="form-control bg-transparent" id="adPort" value="389" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">@(isAr ? "تشفير القناة" : "Channel security")</label>
+                    <select name="ADSecurityMode" id="adSecurityMode" class="form-control bg-transparent">
+                        <option value="0" selected>@(isAr ? "تلقائي (حسب المنفذ)" : "Auto (by port)")</option>
+                        <option value="1">@(isAr ? "sign & seal — 389، بلا شهادة" : "Sign & seal — 389, no certificate")</option>
+                        <option value="2">@(isAr ? "LDAPS — 636، يتطلب شهادة" : "LDAPS — 636, needs certificate")</option>
+                        <option value="3">StartTLS — 389</option>
+                        <option value="4">@(isAr ? "بلا تشفير" : "No encryption")</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="ADAllowUntrustedCertificate" value="true" id="chkAdUntrusted">
+                        <label class="form-check-label fs-sm" for="chkAdUntrusted">@(isAr ? "قبول شهادة غير موثوقة (CA داخلي / self-signed)" : "Accept untrusted certificate (internal CA / self-signed)")</label>
+                    </div>
+                    <div id="adModeHint" class="alert alert-secondary py-1 px-2 mb-0 mt-2 fs-xs"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">@(isAr ? "اسم المستخدم" : "Username") <span class="text-danger">*</span></label>
+                    <input type="text" name="ADUsername" class="form-control bg-transparent" id="adUsername"
+                           placeholder="@(isAr ? "مثال: domain\\admin" : "e.g., domain\\admin")" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">@(isAr ? "كلمة المرور" : "Password") <span class="text-danger">*</span></label>
+                    <input type="password" name="ADPassword" class="form-control bg-transparent" id="adPassword" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">@(isAr ? "Base DN" : "Base DN") <span class="text-danger">*</span></label>
+                    <input type="text" name="ADBaseDN" class="form-control bg-transparent" id="adBaseDN"
+                           placeholder="@(isAr ? "مثال: DC=domain,DC=com" : "e.g., DC=domain,DC=com")" />
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="button" class="btn btn-outline-info w-100" id="btnTestAd">
+                        <i class="bi bi-plug-fill me-1"></i> @(isAr ? "اختبار الاتصال" : "Test Connection")
+                    </button>
+                </div>
+            </div>
+            <div id="adTestResult" class="mt-2"></div>
+        </div>
+    </div>
+
+    <!-- Step 4: Schedule -->
+    <div class="wizard-panel" id="step4">
+        <div class="glass-card">
+            <h6 class="fw-700 mb-3">
+                <i class="bi bi-clock-fill me-2 text-warning"></i>
+                @(isAr ? "جدولة التشغيل" : "Execution Schedule")
+            </h6>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">@(isAr ? "نوع الجدولة" : "Schedule Mode")</label>
+                    <select name="ScheduleMode" class="form-select bg-transparent" id="scheduleMode">
+                        <option value="daily">@(isAr ? "يومي" : "Daily")</option>
+                        <option value="weekly">@(isAr ? "أسبوعي" : "Weekly")</option>
+                        <option value="monthly">@(isAr ? "شهري" : "Monthly")</option>
+                        <option value="interval">@(isAr ? "فترة زمنية" : "Interval")</option>
+                        <option value="custom">@(isAr ? "مخصص (Cron)" : "Custom (Cron)")</option>
+                    </select>
+                </div>
+                <div class="col-md-4" id="timeGroup">
+                    <label class="form-label">@(isAr ? "الوقت" : "Time")</label>
+                    <input type="time" name="ScheduleTime" class="form-control bg-transparent" value="02:00" />
+                </div>
+                <div class="col-md-4" id="intervalGroup" style="display:none">
+                    <label class="form-label">@(isAr ? "الفترة (بالدقائق)" : "Interval (minutes)")</label>
+                    <input type="number" name="ScheduleIntervalMinutes" class="form-control bg-transparent" value="60" min="5" />
+                </div>
+                @* 1-28 only: cron cannot say "last day", so day 31 simply never fires in five
+                   months of the year while the screen still shows a configured schedule. *@
+                <div class="col-md-4" id="dayOfMonthGroup" style="display:none">
+                    <label class="form-label">@(isAr ? "يوم الشهر" : "Day of month")</label>
+                    <input type="number" name="ScheduleDayOfMonth" class="form-control bg-transparent" value="1" min="1" max="28" />
+                    <div class="form-text">
+                        @(isAr
+                            ? "من 1 إلى 28. الأيام 29–31 لا توجد في كل الشهور فتُتخطّى تلك الشهور بالكامل — للتشغيل في نهاية الشهر استخدم «مخصص»."
+                            : "1 to 28. Days 29-31 do not exist in every month and those months are skipped entirely — for a month-end run use \"Custom\".")
+                    </div>
+                </div>
+            </div>
+
+            @* The field this mode never had. Without it "custom" silently became a daily schedule. *@
+            <div class="mt-3" id="customCronGroup" style="display:none">
+                <label class="form-label">@(isAr ? "تعبير Cron" : "Cron expression")</label>
+                <input type="text" name="ScheduleCustomCron" class="form-control bg-transparent" placeholder="0 2 1 * *" dir="ltr" />
+                <div class="form-text">
+                    @(isAr
+                        ? "خمسة حقول: دقيقة ساعة يوم-الشهر شهر يوم-الأسبوع. مثال: 0 2 1 * * = الساعة 02:00 من أول كل شهر. التعبير الخاطئ يرفض الحفظ برسالة."
+                        : "Five fields: minute hour day-of-month month day-of-week. Example: 0 2 1 * * = 02:00 on the 1st of each month. An invalid expression refuses the save with a reason.")
+                </div>
+            </div>
+
+            <div class="mt-3" id="daysGroup" style="display:none">
+                <label class="form-label">@(isAr ? "أيام التشغيل" : "Days")</label>
+                <div class="d-flex flex-wrap gap-2">
+                    @{
+                        var dayNames = isAr
+                            ? new[] { "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت" }
+                            : new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+                    }
+                    @for (int i = 0; i < 7; i++)
+                    {
+                        <label class="btn btn-outline-secondary btn-sm day-btn">
+                            <input type="checkbox" class="d-none day-checkbox" value="@i"> @dayNames[i]
+                        </label>
+                    }
+                </div>
+                <input type="hidden" name="ScheduleDays" id="scheduleDays" />
+            </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="glass-card mt-3">
+            <div class="d-flex justify-content-between">
+                <button type="button" class="btn btn-glass" id="btnPrev4">
+                    <i class="bi bi-arrow-@(isAr ? "right" : "left") me-1"></i> @(isAr ? "السابق" : "Previous")
+                </button>
+                <button type="submit" class="btn btn-accent btn-lg">
+                    <i class="bi bi-check-lg me-1"></i> @(isAr ? "إنشاء الخدمة" : "Create Service")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Buttons (for steps 1-3) -->
+    <div class="glass-card mt-3 wizard-nav" id="wizardNav">
+        <div class="d-flex justify-content-between">
+            <button type="button" class="btn btn-glass" id="btnPrev" style="visibility:hidden">
+                <i class="bi bi-arrow-@(isAr ? "right" : "left") me-1"></i> @(isAr ? "السابق" : "Previous")
+            </button>
+            <button type="button" class="btn btn-accent" id="btnNext">
+                @(isAr ? "التالي" : "Next") <i class="bi bi-arrow-@(isAr ? "left" : "right") ms-1"></i>
+            </button>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+<script src="~/js/ldap-mode-hint.js"></script>
+<script>
+    // Live explanation of the chosen AD channel mode + port.
+    document.addEventListener('DOMContentLoaded', function () {
+        bindLdapModeHint({ mode: 'adSecurityMode', port: 'adPort', hint: 'adModeHint', rtl: @(isAr ? "true" : "false") });
+    });
+</script>
+
+<style>
+    .wizard-steps {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .wizard-step {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        opacity: 0.5;
+        transition: all 0.3s ease;
+        font-size: 0.85rem;
+    }
+    .wizard-step.active {
+        opacity: 1;
+        border-color: var(--accent);
+        background: rgba(99,102,241,0.1);
+    }
+    .wizard-step.done {
+        opacity: 0.8;
+        border-color: var(--success);
+    }
+    .wizard-step.done .wizard-step-number {
+        background: var(--success);
+    }
+    .wizard-step-number {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.8rem;
+    }
+    .wizard-step.active .wizard-step-number {
+        background: var(--accent);
+        color: white;
+    }
+    .wizard-panel {
+        display: none;
+        animation: fadeIn 0.3s ease;
+    }
+    .wizard-panel.active {
+        display: block;
+    }
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .day-btn {
+        min-width: 60px;
+    }
+    .day-btn:has(.day-checkbox:checked) {
+        background: var(--accent) !important;
+        border-color: var(--accent) !important;
+        color: white !important;
+    }
+</style>
+
+<script>
+    let currentStep = 1;
+    const totalSteps = 4;
+
+    function showStep(step) {
+        document.querySelectorAll('.wizard-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('step' + step).classList.add('active');
+
+        document.querySelectorAll('.wizard-step').forEach((s, i) => {
+            s.classList.remove('active', 'done');
+            if (i + 1 === step) s.classList.add('active');
+            else if (i + 1 < step) s.classList.add('done');
+        });
+
+        // Show/hide nav
+        document.getElementById('wizardNav').style.display = step === 4 ? 'none' : '';
+        document.getElementById('btnPrev').style.visibility = step === 1 ? 'hidden' : 'visible';
+    }
+
+    // Empty-Attribute Disable AND Inactive-Account Disable scan AD directly — no source database (step 2)
+    function isAdOnlyType() {
+        const t = document.getElementById('serviceType').value;
+        return t === 'EmptyAttrDisable' || t === 'InactiveDisable' || t === 'AdAudit' || t === 'ExpiryDisable';
+    }
+
+    // Orphan: show the quarantine OU only for the move action.
+    function onOrphanActionChange() {
+        const a = document.getElementById('orphanAction');
+        const q = document.getElementById('quarantineOuGroup');
+        if (a && q) q.style.display = a.value === 'DisableAndMove' ? '' : 'none';
+    }
+
+    // Show only the config relevant to the chosen report type.
+    function onReportTypeChange() {
+        const rt = document.getElementById('reportType');
+        if (!rt) return;
+        const isNhi = rt.value === 'NonHumanInventory';
+        // The inventory needs this field too, but for the opposite purpose: not what to list,
+        // but what counts as privileged among the accounts it finds.
+        const needsGroups = rt.value === 'PrivilegedGroups' || rt.value === 'AccessCertification' || isNhi;
+        const needsDup = rt.value === 'DuplicateAccounts';
+        const isPwd = rt.value === 'PasswordNeverExpires';
+        const g = document.getElementById('auditGroupsGroup');
+        const d = document.getElementById('duplicateAttrGroup');
+        const p = document.getElementById('pwdActionGroup');
+        const n = document.getElementById('nhiGroup');
+        const gh = document.getElementById('nhiGroupsHint');
+        if (g) g.style.display = needsGroups ? '' : 'none';
+        if (d) d.style.display = needsDup ? '' : 'none';
+        if (p) p.style.display = isPwd ? '' : 'none';
+        if (n) n.style.display = isNhi ? '' : 'none';
+        if (gh) gh.style.display = isNhi ? '' : 'none';
+        onPwdActionChange();
+    }
+
+    // The removal warning and the exclusion field only matter once "Remove" is chosen —
+    // showing them under "Report only" would imply the report changes something.
+    function onPwdActionChange() {
+        const rt = document.getElementById('reportType');
+        const sel = document.getElementById('pwdNeverExpiresAction');
+        const warn = document.getElementById('pwdRemoveWarning');
+        const excl = document.getElementById('pwdExclusionGroup');
+        const removing = rt && sel && rt.value === 'PasswordNeverExpires' && sel.value === 'Remove';
+        if (warn) warn.style.display = removing ? '' : 'none';
+        if (excl) excl.style.display = removing ? '' : 'none';
+    }
+
+    document.getElementById('btnNext').addEventListener('click', () => {
+        if (currentStep < totalSteps) {
+            currentStep++;
+            if (currentStep === 2 && isAdOnlyType()) currentStep = 3;
+            showStep(currentStep);
+        }
+    });
+    document.getElementById('btnPrev').addEventListener('click', () => {
+        if (currentStep > 1) {
+            currentStep--;
+            if (currentStep === 2 && isAdOnlyType()) currentStep = 1;
+            showStep(currentStep);
+        }
+    });
+    document.getElementById('btnPrev4')?.addEventListener('click', () => {
+        currentStep = 3; showStep(currentStep);
+    });
+
+    // Provider change: adjust port and labels
+    document.getElementById('sourceProvider').addEventListener('change', function() {
+        const isOracle = this.value === 'Oracle';
+        document.getElementById('srcPort').value = isOracle ? 1521 : 1433;
+        document.getElementById('lblDatabase').textContent = isOracle
+            ? '@(isAr ? "اسم الخدمة (Service Name)" : "Service Name")'
+            : '@(isAr ? "اسم قاعدة البيانات" : "Database Name")';
+        document.getElementById('integratedSecurityGroup').style.display = isOracle ? 'none' : '';
+    });
+
+    // Schedule mode change
+    document.getElementById('scheduleMode').addEventListener('change', function() {
+        const m = this.value;
+        document.getElementById('timeGroup').style.display = (m === 'daily' || m === 'weekly' || m === 'monthly') ? '' : 'none';
+        document.getElementById('intervalGroup').style.display = m === 'interval' ? '' : 'none';
+        document.getElementById('daysGroup').style.display = m === 'weekly' ? '' : 'none';
+        document.getElementById('dayOfMonthGroup').style.display = m === 'monthly' ? '' : 'none';
+        document.getElementById('customCronGroup').style.display = m === 'custom' ? '' : 'none';
+    });
+
+    // Day checkboxes
+    document.querySelectorAll('.day-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const selected = [...document.querySelectorAll('.day-checkbox:checked')].map(c => c.value);
+            document.getElementById('scheduleDays').value = selected.join(',');
+        });
+    });
+
+    // Service type toggle — inputs of hidden panels are disabled so duplicate
+    // field names (OffboardingSearchOU, NotificationEmail...) are not submitted twice
+    function togglePanels() {
+        const type = document.getElementById('serviceType').value;
+        const panels = { offboardingFields: 'Offboarding', emptyAttrFields: 'EmptyAttrDisable', inactiveFields: 'InactiveDisable', auditFields: 'AdAudit', expiryFields: 'ExpiryDisable', orphanFields: 'OrphanCleanup' };
+        for (const [id, forType] of Object.entries(panels)) {
+            const panel = document.getElementById(id);
+            const active = type === forType;
+            panel.style.display = active ? '' : 'none';
+            panel.querySelectorAll('input, select, textarea').forEach(el => el.disabled = !active);
+        }
+        // Step 2 (source database) is not used by the AD-only services (orphan DOES use it)
+        document.querySelector('.wizard-step[data-step="2"]').style.display = isAdOnlyType() ? 'none' : '';
+        if (type === 'AdAudit') onReportTypeChange();
+        if (type === 'OrphanCleanup') onOrphanActionChange();
+    }
+    document.getElementById('serviceType').addEventListener('change', togglePanels);
+    togglePanels();
+
+    // Load SMS providers into every provider dropdown on the page
+    async function loadSmsProviders() {
+        try {
+            const res = await fetch('/SmsCenter/GetProviders');
+            const data = await res.json();
+            document.querySelectorAll('#smsProviderSelect, #smsProviderSelectInactive, #smsProviderSelectExpiry').forEach(sel => {
+                data.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id; opt.textContent = p.name + (p.senderName ? ' (' + p.senderName + ')' : '');
+                    sel.appendChild(opt);
+                });
+            });
+        } catch (e) { /* ignore */ }
+    }
+    loadSmsProviders();
+
+    // SMS toggle
+    document.getElementById('chkSms')?.addEventListener('change', function() {
+        document.getElementById('phoneColGroup').style.display = this.checked ? '' : 'none';
+        document.getElementById('smsProviderGroup').style.display = this.checked ? '' : 'none';
+        document.getElementById('smsTemplateGroup').style.display = this.checked ? '' : 'none';
+    });
+
+    // Email toggle
+    document.getElementById('chkEmail')?.addEventListener('change', function() {
+        document.getElementById('emailToGroup').style.display = this.checked ? '' : 'none';
+        document.getElementById('emailSubjectGroup').style.display = this.checked ? '' : 'none';
+        document.getElementById('emailBodyGroup').style.display = this.checked ? '' : 'none';
+    });
+
+    // Test Source Connection
+    document.getElementById('btnTestSrc').addEventListener('click', async () => {
+        const btn = document.getElementById('btnTestSrc');
+        const resultDiv = document.getElementById('srcTestResult');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> @(isAr ? "جاري الاختبار..." : "Testing...")';
+
+        try {
+            const formData = new FormData();
+            formData.append('provider', document.getElementById('sourceProvider').value);
+            formData.append('host', document.getElementById('srcHost').value);
+            formData.append('port', document.getElementById('srcPort').value);
+            formData.append('database', document.getElementById('srcDatabase').value);
+            formData.append('username', document.getElementById('srcUsername').value);
+            formData.append('password', document.getElementById('srcPassword').value);
+            formData.append('integratedSecurity', document.getElementById('chkIntegrated').checked);
+
+            const res = await fetch('@Url.Action("TestConnection")', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            resultDiv.innerHTML = data.success
+                ? `<div class="alert alert-success py-2 fs-sm"><i class="bi bi-check-circle-fill me-1"></i> ${data.message}</div>`
+                : `<div class="alert alert-danger py-2 fs-sm"><i class="bi bi-x-circle-fill me-1"></i> ${data.message}</div>`;
+        } catch (e) {
+            resultDiv.innerHTML = `<div class="alert alert-danger py-2 fs-sm">${e.message}</div>`;
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug-fill me-1"></i> @(isAr ? "اختبار الاتصال" : "Test Connection")';
+    });
+
+    // Test AD Connection
+    document.getElementById('btnTestAd').addEventListener('click', async () => {
+        const btn = document.getElementById('btnTestAd');
+        const resultDiv = document.getElementById('adTestResult');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> @(isAr ? "جاري الاختبار..." : "Testing...")';
+
+        try {
+            const formData = new FormData();
+            formData.append('server', document.getElementById('adServer').value);
+            formData.append('port', document.getElementById('adPort').value);
+            formData.append('securityMode', document.getElementById('adSecurityMode').value);
+            formData.append('allowUntrustedCertificate', document.getElementById('chkAdUntrusted').checked);
+            formData.append('username', document.getElementById('adUsername').value);
+            formData.append('password', document.getElementById('adPassword').value);
+            formData.append('baseDN', document.getElementById('adBaseDN').value);
+
+            const res = await fetch('@Url.Action("TestAdConnection")', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            resultDiv.innerHTML = data.success
+                ? `<div class="alert alert-success py-2 fs-sm"><i class="bi bi-check-circle-fill me-1"></i> ${data.message}</div>`
+                : `<div class="alert alert-danger py-2 fs-sm"><i class="bi bi-x-circle-fill me-1"></i> ${data.message}</div>`;
+        } catch (e) {
+            resultDiv.innerHTML = `<div class="alert alert-danger py-2 fs-sm">${e.message}</div>`;
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug-fill me-1"></i> @(isAr ? "اختبار الاتصال" : "Test Connection")';
+    });
+</script>
+}

@@ -1,0 +1,242 @@
+@model IEnumerable<IdentitySyncPro.Core.Models.Settings.AuthDomain>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "دومينات الدخول" : "Sign-in Domains";
+    var adUserCount = (int)(ViewBag.AdUserCount ?? 0);
+    var activeDomains = Model.Count(d => d.IsActive);
+}
+
+<div class="glass-card mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+            <h6 class="fw-600 mb-1"><i class="bi bi-diagram-3-fill me-2 text-accent"></i>@(isAr ? "دومينات دخول المستخدمين" : "Console Sign-in Domains")</h6>
+            <p class="fs-sm text-muted mb-0">
+                @(isAr
+                    ? "الدومينات التي يتحقق منها النظام عند دخول مستخدم بنوع «Active Directory». خاصة بهذه الوحدة — مستقلة تماماً عن إعدادات الجهات ودومينات إعادة تعيين كلمة المرور."
+                    : "The domains console sign-in verifies against for users of type \"Active Directory\". Owned by this module — independent of tenant settings and SSPR domains.")
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-glass btn-sm" asp-action="Index"><i class="bi bi-arrow-@(isAr ? "right" : "left") me-1"></i> @(isAr ? "المستخدمون" : "Users")</a>
+            <button class="btn btn-glow btn-sm" onclick="editDomain(0)"><i class="bi bi-plus-lg me-1"></i> @(isAr ? "إضافة دومين" : "Add Domain")</button>
+        </div>
+    </div>
+
+    @if (adUserCount > 0 && activeDomains == 0)
+    {
+        <div class="alert alert-danger py-2 px-3 mt-3 mb-0 fs-sm">
+            <i class="bi bi-exclamation-octagon-fill me-1"></i>
+            @(isAr
+                ? $"يوجد {adUserCount} مستخدم نشط يدخل بحساب الدومين، ولا يوجد أي دومين نشط هنا — لن يستطيع أيٌّ منهم الدخول. أضف دوميناً."
+                : $"{adUserCount} active user(s) sign in with a domain account and no domain is active here — none of them can sign in. Add one.")
+        </div>
+    }
+    else if (adUserCount == 0 && Model.Any())
+    {
+        <div class="alert alert-secondary py-2 px-3 mt-3 mb-0 fs-sm">
+            <i class="bi bi-info-circle me-1"></i>
+            @(isAr
+                ? "لا يوجد حالياً أي مستخدم بنوع دخول «Active Directory»، فهذه الدومينات غير مستخدمة — تبقى محفوظة لحين إضافة مستخدم دومين."
+                : "No user currently signs in with Active Directory, so these domains are unused — they stay saved until you add a domain user.")
+        </div>
+    }
+</div>
+
+<div class="glass-card p-0" style="overflow:hidden">
+    <table class="table-glass">
+        <thead>
+            <tr>
+                <th>@(isAr ? "الترتيب" : "Order")</th>
+                <th>@(isAr ? "الاسم" : "Name")</th>
+                <th>@(isAr ? "السيرفر" : "Server")</th>
+                <th>@(isAr ? "القناة" : "Channel")</th>
+                <th>@(isAr ? "الحالة" : "Status")</th>
+                <th>@(isAr ? "إجراءات" : "Actions")</th>
+            </tr>
+        </thead>
+        <tbody>
+        @if (!Model.Any())
+        {
+            <tr><td colspan="6" class="text-center text-muted py-4">@(isAr ? "لا يوجد دومين — أضف واحداً ليتمكن مستخدمو الدومين من الدخول." : "No domain yet — add one so domain users can sign in.")</td></tr>
+        }
+        @foreach (var d in Model)
+        {
+            var mode = d.AdSecurityModeSet
+                ? d.AdSecurityMode
+                : IdentitySyncPro.Core.Models.Connectors.LdapConnectionOptions.FromUseSsl(d.AdUseSsl);
+            <tr>
+                <td class="text-muted fs-sm">@d.SortOrder</td>
+                <td class="fw-600">@d.Name</td>
+                <td class="text-muted fs-sm" dir="ltr">@d.AdServer:@d.AdPort</td>
+                <td class="fs-sm">
+                    <span class="badge-status @(mode == IdentitySyncPro.Core.Enums.LdapSecurityMode.None ? "badge-danger" : "badge-info")">
+                        @IdentitySyncPro.Infrastructure.Connectors.LdapConnectionFactory.Describe(mode, d.AdPort)
+                    </span>
+                </td>
+                <td><span class="badge-status @(d.IsActive ? "badge-success" : "badge-danger")">@(d.IsActive ? (isAr ? "نشط" : "Active") : (isAr ? "معطل" : "Off"))</span></td>
+                <td class="d-flex gap-1">
+                    <button class="btn btn-glass btn-sm" title="@(isAr ? "اختبار الدخول" : "Test sign-in")" onclick="openTest(@d.Id, '@d.Name')"><i class="bi bi-plug"></i></button>
+                    <button class="btn btn-glass btn-sm" title="@(isAr ? "تعديل" : "Edit")"
+                            onclick='editDomain(@d.Id, @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new { d.Name, d.AdServer, d.AdPort, AdSecurityMode = (int)mode, d.AdAllowUntrustedCertificate, d.SortOrder, d.IsActive })))'><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-danger-glass btn-sm" title="@(isAr ? "حذف" : "Delete")" onclick="deleteDomain(@d.Id, '@d.Name')"><i class="bi bi-trash3"></i></button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+
+<!-- Domain editor -->
+<div class="modal fade" id="domainModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content glass-card border-0">
+            <div class="modal-header border-0">
+                <h6 class="modal-title fw-600" id="domainModalTitle">@(isAr ? "دومين دخول" : "Sign-in domain")</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="dId" />
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label fs-xs text-muted">@(isAr ? "الاسم *" : "Name *")</label><input id="dName" class="form-control form-control-sm" placeholder="corp.local" /></div>
+                    <div class="col-md-4"><label class="form-label fs-xs text-muted">@(isAr ? "السيرفر *" : "Server *")</label><input id="dServer" class="form-control form-control-sm" dir="ltr" placeholder="dc01.corp.local" /></div>
+                    <div class="col-md-2"><label class="form-label fs-xs text-muted">@(isAr ? "المنفذ" : "Port")</label><input id="dPort" type="number" value="389" class="form-control form-control-sm" /></div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fs-xs text-muted">@(isAr ? "تشفير القناة" : "Channel security")</label>
+                        <select id="dSecurityMode" class="form-select form-select-sm">
+                            <option value="0">@(isAr ? "تلقائي (حسب المنفذ)" : "Auto (by port)")</option>
+                            <option value="1">@(isAr ? "sign & seal — 389، بلا شهادة" : "Sign & seal — 389, no certificate")</option>
+                            <option value="2">@(isAr ? "LDAPS — 636، يتطلب شهادة" : "LDAPS — 636, needs certificate")</option>
+                            <option value="3">@(isAr ? "StartTLS — 389، يتطلب شهادة" : "StartTLS — 389, needs certificate")</option>
+                            <option value="4">@(isAr ? "بلا تشفير (للتشخيص فقط)" : "No encryption (diagnostics only)")</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2"><label class="form-label fs-xs text-muted">@(isAr ? "الترتيب" : "Order")</label><input id="dSortOrder" type="number" value="0" class="form-control form-control-sm" /></div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="d-flex flex-column gap-1 w-100">
+                            <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="dAllowUntrusted" /><label class="form-check-label fs-xs" for="dAllowUntrusted">@(isAr ? "قبول شهادة غير موثوقة" : "Accept untrusted certificate")</label></div>
+                            <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="dIsActive" checked /><label class="form-check-label fs-xs" for="dIsActive">@(isAr ? "نشط" : "Active")</label></div>
+                        </div>
+                    </div>
+
+                    <div class="col-12"><div id="dModeHint" class="alert alert-secondary py-1 px-2 mb-0 fs-xs"></div></div>
+
+                    <div class="col-12">
+                        <div class="alert alert-secondary py-2 px-3 mb-0 fs-xs">
+                            <i class="bi bi-shield-lock me-1"></i>
+                            @(isAr
+                                ? "لا يُطلب حساب خدمة ولا Base DN: الدخول يتم بربط LDAP بحساب المستخدم نفسه وكلمة مروره، فلا يُخزَّن هنا أي سرّ. الترتيب يحدد أيّ دومين يُجرَّب أولاً عند وجود المستخدم في أكثر من دومين."
+                                : "No service account and no Base DN are needed: sign-in binds with the user's own username and password, so no secret is stored here. The order decides which domain is tried first when a user exists in more than one.")
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-glow btn-sm" onclick="saveDomain()"><i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ" : "Save")</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test sign-in -->
+<div class="modal fade" id="testModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-card border-0">
+            <div class="modal-header border-0">
+                <h6 class="modal-title fw-600" id="testModalTitle">@(isAr ? "اختبار الدخول" : "Test sign-in")</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="tId" />
+                <p class="fs-xs text-muted">
+                    @(isAr
+                        ? "أدخل بيانات أي حساب حقيقي من هذا الدومين. تُستخدم لمحاولة ربط واحدة ولا تُحفظ إطلاقاً — هذا هو الاختبار الوحيد الذي يثبت أن المستخدمين سيستطيعون الدخول فعلاً."
+                        : "Enter any real account from this domain. Used for a single bind and never stored — this is the only test that proves users will actually be able to sign in.")
+                </p>
+                <div class="row g-2">
+                    <div class="col-md-6"><label class="form-label fs-xs text-muted">@(isAr ? "اسم المستخدم" : "Username")</label><input id="tUser" class="form-control form-control-sm" dir="ltr" autocomplete="off" /></div>
+                    <div class="col-md-6"><label class="form-label fs-xs text-muted">@(isAr ? "كلمة المرور" : "Password")</label><input id="tPass" type="password" class="form-control form-control-sm" autocomplete="new-password" /></div>
+                </div>
+                <div id="tResult" class="mt-3"></div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-glow btn-sm" onclick="runTest()"><i class="bi bi-plug me-1"></i> @(isAr ? "اختبار" : "Test")</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/ldap-mode-hint.js"></script>
+<script>
+    // isRtl and showToast come from _Layout. Re-declaring isRtl here with `const` is a parse-time
+    // SyntaxError that silently discards this entire block — the buttons then do nothing at all.
+    let domainModal, testModal;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        domainModal = new bootstrap.Modal(document.getElementById('domainModal'));
+        testModal = new bootstrap.Modal(document.getElementById('testModal'));
+        bindLdapModeHint({ mode: 'dSecurityMode', port: 'dPort', hint: 'dModeHint', rtl: isRtl });
+    });
+
+    async function post(url, body) {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
+        return res.json();
+    }
+
+    function editDomain(id, d) {
+        document.getElementById('dId').value = id;
+        document.getElementById('dName').value = d ? d.name : '';
+        document.getElementById('dServer').value = d ? d.adServer : '';
+        document.getElementById('dPort').value = d ? d.adPort : 389;
+        document.getElementById('dSecurityMode').value = d ? d.adSecurityMode : 0;
+        document.getElementById('dAllowUntrusted').checked = d ? d.adAllowUntrustedCertificate : false;
+        document.getElementById('dSortOrder').value = d ? d.sortOrder : 0;
+        document.getElementById('dIsActive').checked = d ? d.isActive : true;
+        document.getElementById('dSecurityMode').dispatchEvent(new Event('change'));
+        domainModal.show();
+    }
+
+    async function saveDomain() {
+        const r = await post('@Url.Action("SaveDomain")', {
+            id: document.getElementById('dId').value,
+            name: document.getElementById('dName').value,
+            adServer: document.getElementById('dServer').value,
+            adPort: document.getElementById('dPort').value,
+            adSecurityMode: document.getElementById('dSecurityMode').value,
+            adAllowUntrustedCertificate: document.getElementById('dAllowUntrusted').checked,
+            sortOrder: document.getElementById('dSortOrder').value,
+            isActive: document.getElementById('dIsActive').checked
+        });
+        if (r.success) location.reload(); else showToast(r.message, 'error');
+    }
+
+    async function deleteDomain(id, name) {
+        if (!confirm(isRtl ? ('حذف الدومين «' + name + '»؟') : ('Delete domain "' + name + '"?'))) return;
+        const r = await post('@Url.Action("DeleteDomain")', { id });
+        if (r.success) location.reload(); else showToast(r.message, 'error');
+    }
+
+    function openTest(id, name) {
+        document.getElementById('tId').value = id;
+        document.getElementById('testModalTitle').textContent = (isRtl ? 'اختبار الدخول — ' : 'Test sign-in — ') + name;
+        document.getElementById('tUser').value = '';
+        document.getElementById('tPass').value = '';
+        document.getElementById('tResult').innerHTML = '';
+        testModal.show();
+    }
+
+    async function runTest() {
+        const box = document.getElementById('tResult');
+        box.innerHTML = '<div class="text-muted fs-sm"><span class="spinner-border spinner-border-sm me-2"></span>' + (isRtl ? 'جارٍ الاختبار…' : 'Testing…') + '</div>';
+        const r = await post('@Url.Action("TestDomain")', {
+            id: document.getElementById('tId').value,
+            testUsername: document.getElementById('tUser').value,
+            testPassword: document.getElementById('tPass').value
+        });
+        box.innerHTML = '<div class="alert ' + (r.success ? 'alert-success' : 'alert-danger') + ' py-2 px-3 mb-0 fs-sm">' + r.message + '</div>';
+        // The password is not kept around after the answer is in.
+        document.getElementById('tPass').value = '';
+    }
+</script>
+}

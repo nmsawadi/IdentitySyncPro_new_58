@@ -1,0 +1,68 @@
+@{
+    Layout = "_AuthLayout";
+    var isAr = (ViewBag.Lang as string ?? "ar") != "en";
+    ViewData["Title"] = isAr ? "رموز الاسترداد" : "Recovery codes";
+    var codes = ViewBag.Codes as string[] ?? Array.Empty<string>();
+}
+
+<h6 class="fw-bold text-center mb-1">
+    <i class="bi bi-check-circle-fill text-success me-1"></i>
+    @(isAr ? "تم تفعيل التحقق بخطوتين" : "Two-factor is now enabled")
+</h6>
+
+<div class="alert alert-warning py-2 px-3 mt-3 fs-sm">
+    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+    <strong>@(isAr ? "احفظ هذه الرموز الآن" : "Save these codes now")</strong> —
+    @(isAr
+        ? "لن تظهر مرة أخرى (يُخزَّن منها تجزئة فقط). كل رمز يُستخدم مرة واحدة، وهي طريقتك الوحيدة للدخول إن فقدت جهازك."
+        : "They will not be shown again (only hashes are stored). Each works once, and they are your only way in if you lose your device.")
+</div>
+
+<div class="row g-2 my-3">
+    @foreach (var c in codes)
+    {
+        <div class="col-6"><div class="recovery-code">@c</div></div>
+    }
+</div>
+
+<div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-light btn-sm flex-fill" onclick="copyCodes()">
+        <i class="bi bi-clipboard me-1"></i> @(isAr ? "نسخ" : "Copy")
+    </button>
+    <button type="button" class="btn btn-outline-light btn-sm flex-fill" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i> @(isAr ? "طباعة" : "Print")
+    </button>
+</div>
+
+<form method="post" action="@Url.Action("MfaRecoveryCodesAck", "Account")" class="mt-3">
+    @Html.AntiForgeryToken()
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="ack" onchange="document.getElementById('go').disabled = !this.checked" />
+        <label class="form-check-label fs-sm" for="ack">
+            @(isAr ? "حفظتُ هذه الرموز في مكان آمن" : "I have saved these codes somewhere safe")
+        </label>
+    </div>
+    <button id="go" type="submit" class="btn btn-primary btn-auth w-100" disabled>
+        @(isAr ? "متابعة إلى النظام" : "Continue to the console")
+    </button>
+</form>
+
+<script>
+    function copyCodes() {
+        const text = Array.from(document.querySelectorAll('.recovery-code'))
+                          .map(e => e.textContent.trim()).join('\n');
+        // navigator.clipboard needs a secure context; fall back so an HTTP install still works.
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text);
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+        }
+    }
+</script>

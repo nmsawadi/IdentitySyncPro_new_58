@@ -1,0 +1,410 @@
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "المراقبة المباشرة" : "Live Monitor";
+}
+
+<!-- Live Status Header -->
+<div class="glass-card mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="live-indicator" id="liveIndicator">
+                <div class="live-dot" id="liveDot" style="background:var(--text-muted)"></div>
+                <span class="fw-600" id="liveStatus">@(isAr ? "جاري الاتصال..." : "Connecting...")</span>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-glow" onclick="startSync('full')" id="btnStartFull">
+                <i class="bi bi-arrow-clockwise me-1"></i> @(isAr ? "مزامنة كاملة" : "Start Full Sync")
+            </button>
+            <button class="btn btn-glass" onclick="startSync('delta')" id="btnStartDelta">
+                <i class="bi bi-lightning-charge me-1"></i> @(isAr ? "مزامنة تغييرات" : "Delta Sync")
+            </button>
+            <button class="btn btn-danger-glass" onclick="cancelSync()" id="btnCancel" style="display:none">
+                <i class="bi bi-stop-circle me-1"></i> @(isAr ? "إلغاء" : "Cancel")
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Section -->
+<div class="glass-card mb-4" id="progressSection" style="display:none">
+    <h6 class="fw-600 mb-3"><i class="bi bi-activity me-2 text-accent"></i>@(isAr ? "تقدم المزامنة" : "Sync Progress")</h6>
+
+    <!-- Phase Stepper -->
+    <div id="phaseStepperContainer" style="display:none">
+        <div class="phase-stepper" id="phaseStepper">
+            <!-- Dynamically built by JS -->
+        </div>
+        <div class="text-center mb-3" id="phaseDescriptionContainer">
+            <span class="phase-description-badge" id="phaseDescBadge">
+                <i class="bi bi-gear-fill" id="phaseDescIcon"></i>
+                <span id="phaseDescText">—</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- Overall Progress Bar -->
+    <div class="mb-3">
+        <div class="d-flex justify-content-between mb-2">
+            <span class="fs-sm text-muted" id="currentOp">@(isAr ? "جاري التهيئة..." : "Initializing...")</span>
+            <span class="fw-600 text-accent" id="progressPct">0%</span>
+        </div>
+        <div class="progress-glass">
+            <div class="progress-fill active" id="progressBar" style="width:0%"></div>
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="row g-3 mt-2">
+        <div class="col-md-2 col-4">
+            <div class="text-center p-2 rounded" style="background:rgba(255,255,255,0.02)">
+                <div class="fs-xs text-muted">@(isAr ? "الإجمالي" : "Total")</div>
+                <div class="fw-600 fs-5" id="liveTotal">0</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-4">
+            <div class="text-center p-2 rounded" style="background:rgba(255,255,255,0.02)">
+                <div class="fs-xs text-muted">@(isAr ? "تمت معالجتها" : "Processed")</div>
+                <div class="fw-600 fs-5" id="liveProcessed">0</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-4">
+            <div class="text-center p-2 rounded" style="background:rgba(255,255,255,0.02)">
+                <div class="fs-xs text-muted">@(isAr ? "إنشاء" : "Created")</div>
+                <div class="fw-600 fs-5" style="color:var(--success)" id="liveCreated">0</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-4">
+            <div class="text-center p-2 rounded" style="background:rgba(255,255,255,0.02)">
+                <div class="fs-xs text-muted">@(isAr ? "تحديث" : "Updated")</div>
+                <div class="fw-600 fs-5" style="color:var(--warning)" id="liveUpdated">0</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-4">
+            <div class="text-center p-2 rounded" style="background:rgba(255,255,255,0.02)">
+                <div class="fs-xs text-muted">@(isAr ? "فشل" : "Failed")</div>
+                <div class="fw-600 fs-5" style="color:var(--danger)" id="liveFailed">0</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-4">
+            <div class="text-center p-2 rounded" style="background:rgba(255,255,255,0.02)">
+                <div class="fs-xs text-muted">@(isAr ? "الوقت المنقضي" : "Elapsed")</div>
+                <div class="fw-600 fs-5" id="liveElapsed">00:00</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3 p-2 rounded d-flex align-items-center gap-2" style="background:rgba(99,102,241,0.05)" id="currentIdentitySection">
+        <i class="bi bi-person-fill text-accent"></i>
+        <span class="fs-sm text-muted">@(isAr ? "قيد المعالجة حالياً:" : "Currently processing:")</span>
+        <span class="fw-600 text-accent" id="currentIdentity">—</span>
+    </div>
+</div>
+
+<!-- Live Activity Log -->
+<div class="glass-card">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-600 mb-0"><i class="bi bi-terminal me-2 text-accent"></i>@(isAr ? "سجل النشاط" : "Activity Stream")</h6>
+        <button class="btn btn-glass btn-sm" onclick="clearLog()" id="btnClearLog">
+            <i class="bi bi-trash me-1"></i> @(isAr ? "مسح" : "Clear")
+        </button>
+    </div>
+    <div id="activityLog" style="max-height:400px; overflow-y:auto; font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:12px;">
+        <div class="text-muted text-center py-4" id="logPlaceholder">
+            <i class="bi bi-broadcast-pin fs-3 d-block mb-2" style="opacity:0.3"></i>
+            @(isAr ? "بانتظار نشاط المزامنة..." : "Waiting for sync activity...")
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/hubs/sync")
+        .withAutomaticReconnect([0, 2000, 5000, 10000])
+        .build();
+
+    const logEl = document.getElementById('activityLog');
+    const placeholder = document.getElementById('logPlaceholder');
+
+    // Phase definitions for Full Sync (3 phases) and Delta Sync (2 phases)
+    const phaseLabels = {
+        3: [
+            { icon: 'bi-database', labelAr: 'التحضير', labelEn: 'Preparation' },
+            { icon: 'bi-person-plus', labelAr: 'الحسابات الجديدة', labelEn: 'New Accounts' },
+            { icon: 'bi-arrow-repeat', labelAr: 'التحديثات', labelEn: 'Updates' }
+        ],
+        2: [
+            { icon: 'bi-database', labelAr: 'التحضير', labelEn: 'Preparation' },
+            { icon: 'bi-arrow-repeat', labelAr: 'فحص التغييرات', labelEn: 'Check Changes' }
+        ]
+    };
+
+    let lastTotalPhases = 0;
+
+    function buildPhaseStepper(totalPhases) {
+        if (totalPhases === lastTotalPhases) return;
+        lastTotalPhases = totalPhases;
+
+        const stepper = document.getElementById('phaseStepper');
+        const labels = phaseLabels[totalPhases];
+        if (!labels) return;
+
+        let html = '';
+        for (let i = 0; i < labels.length; i++) {
+            const p = labels[i];
+            const label = isRtl ? p.labelAr : p.labelEn;
+
+            html += `<div class="phase-step" id="phaseStep${i + 1}">
+                <div class="phase-icon" id="phaseIcon${i + 1}">
+                    <i class="bi ${p.icon}" id="phaseIconI${i + 1}"></i>
+                </div>
+                <span class="phase-label">${label}</span>
+            </div>`;
+
+            if (i < labels.length - 1) {
+                html += `<div class="phase-connector" id="phaseConn${i + 1}">
+                    <div class="phase-connector-fill" id="phaseConnFill${i + 1}"></div>
+                </div>`;
+            }
+        }
+        stepper.innerHTML = html;
+        document.getElementById('phaseStepperContainer').style.display = '';
+    }
+
+    function updatePhaseStepper(currentPhase, totalPhases, phaseDescription, phaseProgress) {
+        if (!totalPhases || totalPhases < 2) return;
+
+        buildPhaseStepper(totalPhases);
+
+        // Update each step and connector
+        for (let i = 1; i <= totalPhases; i++) {
+            const step = document.getElementById(`phaseStep${i}`);
+            const iconEl = document.getElementById(`phaseIconI${i}`);
+            if (!step) continue;
+
+            step.classList.remove('active', 'completed');
+
+            if (i < currentPhase) {
+                // Completed phase
+                step.classList.add('completed');
+                iconEl.className = 'bi bi-check-lg';
+            } else if (i === currentPhase) {
+                // Active phase
+                step.classList.add('active');
+                const labels = phaseLabels[totalPhases];
+                if (labels && labels[i - 1]) {
+                    iconEl.className = `bi ${labels[i - 1].icon}`;
+                }
+            } else {
+                // Pending phase
+                const labels = phaseLabels[totalPhases];
+                if (labels && labels[i - 1]) {
+                    iconEl.className = `bi ${labels[i - 1].icon}`;
+                }
+            }
+        }
+
+        // Update connectors
+        for (let i = 1; i < totalPhases; i++) {
+            const conn = document.getElementById(`phaseConn${i}`);
+            const connFill = document.getElementById(`phaseConnFill${i}`);
+            if (!conn || !connFill) continue;
+
+            conn.classList.remove('completed', 'in-progress');
+
+            if (i < currentPhase) {
+                // Completed connector
+                conn.classList.add('completed');
+                connFill.style.width = '100%';
+            } else if (i === currentPhase) {
+                // In-progress connector — fill based on phase progress
+                conn.classList.add('in-progress');
+                connFill.style.width = Math.min(phaseProgress, 100) + '%';
+            } else {
+                // Pending connector
+                connFill.style.width = '0%';
+            }
+        }
+
+        // Update description badge
+        const descBadge = document.getElementById('phaseDescBadge');
+        const descText = document.getElementById('phaseDescText');
+        const descIcon = document.getElementById('phaseDescIcon');
+
+        if (phaseDescription) {
+            descText.textContent = phaseDescription;
+            const isComplete = phaseDescription.includes('اكتملت') || phaseDescription.includes('completed');
+            descBadge.classList.toggle('completed', isComplete);
+            descIcon.className = isComplete ? 'bi bi-check-circle-fill' : 'bi bi-gear-fill';
+        }
+    }
+
+    connection.start().then(() => {
+        connection.invoke("JoinSyncMonitor");
+        updateConnectionStatus(true);
+        addLog(isRtl ? 'تم الاتصال بالمراقبة المباشرة' : 'Connected to live monitor', 'info');
+    }).catch(err => {
+        updateConnectionStatus(false);
+        addLog((isRtl ? 'فشل الاتصال: ' : 'Connection failed: ') + err.message, 'error');
+    });
+
+    connection.onreconnecting(() => updateConnectionStatus(false, isRtl ? 'جاري إعادة الاتصال...' : 'Reconnecting...'));
+    connection.onreconnected(() => { connection.invoke("JoinSyncMonitor"); updateConnectionStatus(true); });
+    connection.onclose(() => updateConnectionStatus(false, isRtl ? 'مفصول' : 'Disconnected'));
+
+    connection.on("SyncProgress", (data) => {
+        document.getElementById('progressSection').style.display = '';
+
+        // Update overall progress bar
+        const pct = Math.round(data.progressPercentage || 0);
+        document.getElementById('progressBar').style.width = pct + '%';
+        document.getElementById('progressPct').textContent = pct + '%';
+        document.getElementById('currentOp').textContent = data.currentOperation;
+
+        // Remove shimmer when complete
+        const progressBar = document.getElementById('progressBar');
+        if (pct >= 100) {
+            progressBar.classList.remove('active');
+        } else {
+            progressBar.classList.add('active');
+        }
+
+        // Update stats
+        document.getElementById('liveTotal').textContent = (data.totalRecords || 0).toLocaleString();
+        document.getElementById('liveProcessed').textContent = (data.processedRecords || 0).toLocaleString();
+        document.getElementById('liveCreated').textContent = (data.created || 0).toLocaleString();
+        document.getElementById('liveUpdated').textContent = (data.updated || 0).toLocaleString();
+        document.getElementById('liveFailed').textContent = (data.failed || 0).toLocaleString();
+
+        if (data.elapsed) {
+            const sec = Math.floor(data.elapsed / 1000);
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = sec % 60;
+            if (h > 0) {
+                document.getElementById('liveElapsed').textContent =
+                    `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            } else {
+                document.getElementById('liveElapsed').textContent =
+                    `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            }
+        }
+
+        if (data.currentIdentityId) {
+            document.getElementById('currentIdentity').textContent = data.currentIdentityId;
+            document.getElementById('currentIdentitySection').style.display = '';
+        }
+
+        // Update phase stepper
+        if (data.currentPhase && data.totalPhases) {
+            updatePhaseStepper(data.currentPhase, data.totalPhases, data.phaseDescription, data.phaseProgress || 0);
+        }
+
+        document.getElementById('btnCancel').style.display = '';
+        addLog(data.currentOperation, 'success');
+    });
+
+    connection.on("Notification", (data) => { showToast(data.message, data.type); addLog(data.message, data.type); });
+
+    function updateConnectionStatus(connected, text) {
+        const dot = document.getElementById('liveDot');
+        const status = document.getElementById('liveStatus');
+        dot.style.background = connected ? 'var(--success)' : 'var(--danger)';
+        dot.style.animation = connected ? 'livePulse 1.5s infinite' : 'none';
+        status.textContent = text || (connected ? (isRtl ? 'متصل — مباشر' : 'Connected — Live') : (isRtl ? 'مفصول' : 'Disconnected'));
+        status.style.color = connected ? 'var(--success)' : 'var(--danger)';
+    }
+
+    function addLog(message, type) {
+        if (placeholder) placeholder.style.display = 'none';
+        const time = new Date().toLocaleTimeString(isRtl ? 'ar-SA' : 'en-US', { hour12: false });
+        const colors = { info: '#60a5fa', success: '#34d399', error: '#f87171', warning: '#fbbf24' };
+        const color = colors[type] || '#94a3b8';
+        const entry = document.createElement('div');
+        entry.className = 'py-1';
+        entry.innerHTML = `<span style="color:var(--text-muted)">[${time}]</span> <span style="color:${color}">${message}</span>`;
+        logEl.appendChild(entry);
+        logEl.scrollTop = logEl.scrollHeight;
+        while (logEl.children.length > 201) logEl.removeChild(logEl.children[1]);
+    }
+
+    function clearLog() { logEl.innerHTML = ''; addLog(isRtl ? 'تم مسح السجل' : 'Log cleared', 'info'); }
+
+    async function startSync(type) {
+        const statusRes = await fetch('/Sync/GetStatus');
+        const statusData = await statusRes.json();
+        if (statusData.isRunning) {
+            showToast(isRtl ? 'المزامنة تعمل حالياً!' : 'Sync is already running!', 'warning');
+            return;
+        }
+
+        const msg = isRtl ? `بدء مزامنة ${type === 'full' ? 'كاملة' : 'تغييرات'}؟` : `Start ${type} sync?`;
+        if (!confirm(msg)) return;
+
+        const btnFull = document.getElementById('btnStartFull');
+        const btnDelta = document.getElementById('btnStartDelta');
+        if (btnFull) { btnFull.disabled = true; btnFull.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + (isRtl ? 'جارٍ...' : 'Running...'); }
+        if (btnDelta) { btnDelta.disabled = true; btnDelta.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + (isRtl ? 'جارٍ...' : 'Running...'); }
+
+        // Reset phase stepper
+        lastTotalPhases = 0;
+        document.getElementById('phaseStepperContainer').style.display = 'none';
+        document.getElementById('phaseStepper').innerHTML = '';
+
+        try {
+            const url = type === 'full' ? '/Sync/StartFullSync' : '/Sync/StartDeltaSync';
+            const res = await fetch(url, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                showToast(data.message, 'success');
+                addLog(`${type} sync started (Job: ${data.jobId})`, 'success');
+                document.getElementById('btnCancel').style.display = '';
+            } else {
+                showToast(data.message, 'warning');
+                addLog(data.message, 'warning');
+                if (btnFull) { btnFull.disabled = false; btnFull.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> @(isAr ? "مزامنة كاملة" : "Full Sync")'; }
+                if (btnDelta) { btnDelta.disabled = false; btnDelta.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> @(isAr ? "مزامنة تغييرات" : "Delta Sync")'; }
+            }
+        } catch (e) {
+            showToast(isRtl ? 'فشل في بدء المزامنة' : 'Failed to start sync', 'error');
+            if (btnFull) { btnFull.disabled = false; btnFull.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> @(isAr ? "مزامنة كاملة" : "Full Sync")'; }
+            if (btnDelta) { btnDelta.disabled = false; btnDelta.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> @(isAr ? "مزامنة تغييرات" : "Delta Sync")'; }
+        }
+    }
+
+    async function cancelSync() {
+        if (!confirm(isRtl ? 'إلغاء المزامنة الجارية؟' : 'Cancel the running sync?')) return;
+        try {
+            const res = await fetch('/Sync/CancelSync', { method: 'POST' });
+            const data = await res.json();
+            showToast(data.message, 'warning');
+            addLog(isRtl ? 'تم طلب الإلغاء' : 'Cancellation requested', 'warning');
+        } catch (e) { showToast(isRtl ? 'فشل في الإلغاء' : 'Failed to cancel', 'error'); }
+    }
+
+    setInterval(async () => {
+        try {
+            const res = await fetch('/Sync/GetStatus');
+            const data = await res.json();
+            if (!data.isRunning) {
+                document.getElementById('btnCancel').style.display = 'none';
+                // Re-enable sync buttons when sync finishes
+                const btnFull = document.getElementById('btnStartFull');
+                const btnDelta = document.getElementById('btnStartDelta');
+                if (btnFull && btnFull.disabled) { btnFull.disabled = false; btnFull.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> @(isAr ? "مزامنة كاملة" : "Start Full Sync")'; }
+                if (btnDelta && btnDelta.disabled) { btnDelta.disabled = false; btnDelta.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> @(isAr ? "مزامنة تغييرات" : "Delta Sync")'; }
+            }
+        } catch {}
+    }, 10000);
+
+    @if ((bool)ViewBag.IsRunning)
+    {
+        <text>
+        document.getElementById('progressSection').style.display = '';
+        document.getElementById('btnCancel').style.display = '';
+        addLog(isRtl ? 'المزامنة قيد التنفيذ حالياً...' : 'Sync is currently in progress...', 'info');
+        </text>
+    }
+</script>
+}

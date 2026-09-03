@@ -1,0 +1,332 @@
+@model IdentitySyncPro.Core.Models.Settings.SsprSettings
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "الخدمة الذاتية لكلمة المرور" : "Self-Service Password Reset";
+    var domains = ViewBag.Domains as List<IdentitySyncPro.Core.Models.Settings.SsprDomain> ?? new();
+    var providers = ((IEnumerable<dynamic>)ViewBag.SmsProviders).ToList();
+}
+
+<div class="glass-card mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <h6 class="fw-600 mb-1"><i class="bi bi-key-fill me-2 text-accent"></i>@(isAr ? "الخدمة الذاتية لإعادة تعيين كلمة المرور" : "Self-Service Password Reset")</h6>
+            <p class="fs-sm text-muted mb-0">@(isAr ? "وحدة مستقلة تتحقق من المستخدمين مباشرة من الدومينات — البوابة العامة على /Sspr" : "Standalone module verifying users directly against AD — public portal at /Sspr")</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="@Url.Action("Log", "SsprSettings")" class="btn btn-glass btn-sm"><i class="bi bi-journal-lock me-1"></i> @(isAr ? "سجل العمليات" : "Reset Log")</a>
+            <a href="/Sspr" target="_blank" class="btn btn-glass btn-sm"><i class="bi bi-box-arrow-up-right me-1"></i> @(isAr ? "فتح البوابة" : "Open Portal")</a>
+        </div>
+    </div>
+
+    <hr style="border-color:rgba(255,255,255,0.06);margin:12px 0">
+
+    <!-- Global settings -->
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="sIsEnabled" @(Model.IsEnabled ? "checked" : "") />
+                <label class="form-check-label fw-600" for="sIsEnabled">@(isAr ? "تفعيل الخدمة" : "Enable service")</label>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fs-xs text-muted">@(isAr ? "مزود الرسائل (خاص بالخدمة)" : "SMS provider (dedicated)")</label>
+            <select id="sSmsProvider" class="form-select form-select-sm">
+                <option value="">@(isAr ? "— اختر —" : "— select —")</option>
+                @foreach (var p in providers)
+                {
+                    <option value="@p.Id" selected="@(Model.SmsProviderId == p.Id)">@p.Name @(p.IsActive ? "" : (isAr ? " (معطل)" : " (inactive)"))</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fs-xs text-muted">@(isAr ? "رسالة رمز التحقق (عربي) — {OTP} موضع الرمز" : "OTP message (Arabic) — {OTP} = code")</label>
+            <input id="sMessage" class="form-control form-control-sm" value="@Model.MessageTemplate" dir="rtl" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fs-xs text-muted">@(isAr ? "رسالة رمز التحقق (إنجليزي) — {OTP} موضع الرمز" : "OTP message (English) — {OTP} = code")</label>
+            <input id="sMessageEn" class="form-control form-control-sm" value="@Model.MessageTemplateEn" dir="ltr" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fs-xs text-muted">@(isAr ? "رسالة كلمة المرور الجديدة (عربي) — {PASSWORD} و {USERNAME}" : "New-password message (Arabic) — {PASSWORD} & {USERNAME}")</label>
+            <input id="sPwd" class="form-control form-control-sm" value="@Model.NewPasswordTemplate" dir="rtl" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fs-xs text-muted">@(isAr ? "رسالة كلمة المرور الجديدة (إنجليزي) — {PASSWORD} و {USERNAME}" : "New-password message (English) — {PASSWORD} & {USERNAME}")</label>
+            <input id="sPwdEn" class="form-control form-control-sm" value="@Model.NewPasswordTemplateEn" dir="ltr" />
+        </div>
+        <!-- Tunable limits — one aligned row of four -->
+        <div class="col-12"><hr style="border-color:rgba(255,255,255,0.06);margin:6px 0"><span class="fs-sm fw-600">@(isAr ? "الحدود والتوقيت" : "Limits & Timing")</span></div>
+        <div class="col-12">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3 col-6">
+                    <label class="form-label fs-xs text-muted mb-1">@(isAr ? "مدة صلاحية الرمز (ثانية)" : "OTP lifetime (sec)")</label>
+                    <input id="sOtpLife" type="number" min="60" max="1800" class="form-control form-control-sm" value="@Model.OtpLifetimeSeconds"
+                           title="@(isAr ? "من 60 إلى 1800 ثانية" : "60–1800 seconds")" />
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label fs-xs text-muted mb-1">@(isAr ? "عدد محاولات إدخال الرمز" : "OTP attempts allowed")</label>
+                    <input id="sMaxAttempts" type="number" min="1" max="10" class="form-control form-control-sm" value="@Model.MaxVerifyAttempts"
+                           title="@(isAr ? "قبل حظر الطلب (1–10)" : "before block (1–10)")" />
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label fs-xs text-muted mb-1">@(isAr ? "طلبات/ساعة لكل IP" : "Requests/hour per IP")</label>
+                    <input id="sMaxIp" type="number" min="1" max="100" class="form-control form-control-sm" value="@Model.MaxRequestsPerIpPerHour" />
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label fs-xs text-muted mb-1">@(isAr ? "طلبات/ساعة لكل مستخدم" : "Requests/hour per user")</label>
+                    <input id="sMaxUser" type="number" min="1" max="50" class="form-control form-control-sm" value="@Model.MaxRequestsPerUserPerHour" />
+                </div>
+            </div>
+            <div class="row g-2 align-items-end mt-1">
+                <div class="col-md-3 col-6">
+                    <label class="form-label fs-xs text-muted mb-1">@(isAr ? "محاولات خاطئة قبل حظر الـ IP" : "Failed attempts before IP block")</label>
+                    <input id="sMaxFailed" type="number" min="1" max="20" class="form-control form-control-sm" value="@Model.MaxFailedIdentityAttempts"
+                           title="@(isAr ? "اسم مستخدم/هوية خاطئة (1–20)" : "wrong username/national ID (1–20)")" />
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label fs-xs text-muted mb-1">@(isAr ? "مدة حظر الـ IP (ساعة)" : "IP block duration (hours)")</label>
+                    <input id="sIpBlockHours" type="number" min="1" max="720" class="form-control form-control-sm" value="@Model.IpBlockDurationHours"
+                           title="@(isAr ? "من 1 إلى 720 ساعة" : "1–720 hours")" />
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label fs-xs text-muted mb-1">@(isAr ? "إعادة تعيين/24 ساعة لكل مستخدم" : "Resets/24h per user")</label>
+                    <input id="sMaxResets24" type="number" min="1" max="20" class="form-control form-control-sm" value="@Model.MaxResetsPerUserPer24h"
+                           title="@(isAr ? "عمليات ناجحة (1–20)" : "successful resets (1–20)")" />
+                </div>
+            </div>
+            <div class="alert alert-warning py-2 px-3 mt-2 mb-0 fs-xs">
+                <i class="bi bi-info-circle me-1"></i>
+                @(isAr
+                    ? "الحظر يتم حسب عنوان IP للجهاز. المستخدمون خلف نفس بوابة الإنترنت (NAT) يشتركون في نفس الـ IP — قد يؤدي الحظر إلى منعهم جميعاً. اختر عدداً مناسباً، ويمكنك رفع الحظر يدوياً من القائمة أدناه."
+                    : "Blocking is per IP address. Users behind the same NAT/gateway share one IP — a block can affect all of them. Pick a sensible threshold; you can lift a block manually from the list below.")
+            </div>
+        </div>
+
+        @{ var blockedIps = ViewBag.BlockedIps as List<IdentitySyncPro.Core.Models.Settings.SsprIpBlock> ?? new(); }
+        <div class="col-12"><hr style="border-color:rgba(255,255,255,0.06);margin:6px 0"><span class="fs-sm fw-600">@(isAr ? "العناوين المحظورة حالياً" : "Currently blocked IPs")</span></div>
+        <div class="col-12">
+            @if (blockedIps.Count == 0)
+            {
+                <span class="fs-xs text-muted">@(isAr ? "لا توجد عناوين محظورة." : "No blocked addresses.")</span>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0 fs-xs">
+                        <thead>
+                            <tr>
+                                <th>IP</th>
+                                <th>@(isAr ? "المحاولات" : "Attempts")</th>
+                                <th>@(isAr ? "آخر اسم مستخدم" : "Last username")</th>
+                                <th>@(isAr ? "ينتهي الحظر" : "Blocked until")</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var b in blockedIps)
+                            {
+                                <tr>
+                                    <td dir="ltr">@b.ClientIp</td>
+                                    <td>@b.FailedCount</td>
+                                    <td dir="ltr">@b.LastUsername</td>
+                                    <td>@b.BlockedUntilUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-light py-0 px-2" onclick="unblockIp(@b.Id)">
+                                            <i class="bi bi-unlock me-1"></i>@(isAr ? "رفع الحظر" : "Unblock")
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="col-12">
+            <span class="fs-xs text-muted d-block mb-2">@(isAr ? "الرسائل تُرسل بلغة البوابة التي اختارها المستخدم. عند إدخال الرمز الصحيح يولّد النظام كلمة مرور ويرسلها تلقائياً." : "Messages are sent in the portal language. On a correct code the system generates a password and sends it automatically.")</span>
+            <button class="btn btn-glow btn-sm" onclick="saveSettings()"><i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ الإعدادات العامة" : "Save settings")</button>
+        </div>
+    </div>
+</div>
+
+<!-- Domains -->
+<div class="glass-card">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-600 mb-0"><i class="bi bi-diagram-3-fill me-2 text-accent"></i>@(isAr ? "الدومينات المخدومة" : "Served Domains")</h6>
+        <button class="btn btn-glass btn-sm" onclick="editDomain(0)"><i class="bi bi-plus-lg me-1"></i> @(isAr ? "إضافة دومين" : "Add Domain")</button>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table-glass">
+            <thead>
+                <tr>
+                    <th>@(isAr ? "الاسم" : "Name")</th>
+                    <th>@(isAr ? "السيرفر" : "Server")</th>
+                    <th>@(isAr ? "سمة الهوية" : "National-ID attr")</th>
+                    <th>@(isAr ? "سمة الجوال" : "Mobile attr")</th>
+                    <th>@(isAr ? "الحالة" : "Status")</th>
+                    <th>@(isAr ? "إجراءات" : "Actions")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in domains)
+                {
+                    <tr>
+                        <td class="fw-600">@d.Name</td>
+                        <td class="text-muted fs-sm">@d.AdServer:@d.AdPort</td>
+                        <td class="fs-sm"><code>@d.NationalIdAttribute</code></td>
+                        <td class="fs-sm"><code>@d.MobileAttribute</code></td>
+                        <td><span class="badge-status @(d.IsActive ? "badge-success" : "badge-danger")">@(d.IsActive ? (isAr ? "نشط" : "Active") : (isAr ? "معطل" : "Off"))</span></td>
+                        <td class="d-flex gap-1">
+                            <button class="btn btn-glass btn-sm" title="@(isAr ? "اختبار الاتصال" : "Test")" onclick="testDomain(@d.Id)"><i class="bi bi-plug"></i></button>
+                            <button class="btn btn-glass btn-sm" title="@(isAr ? "تعديل" : "Edit")"
+                                    onclick='editDomain(@d.Id, @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new { d.Name, d.AdServer, d.AdPort, d.AdUseSsl, AdSecurityMode = (int)d.AdSecurityMode, d.AdSecurityModeSet, d.AdAllowUntrustedCertificate, d.AdUsername, d.AdBaseDN, d.NationalIdAttribute, d.MobileAttribute, d.ExcludedGroups, d.IsActive })))'><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-danger-glass btn-sm" title="@(isAr ? "حذف" : "Delete")" onclick="deleteDomain(@d.Id, '@d.Name')"><i class="bi bi-trash3"></i></button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Domain editor modal -->
+<div class="modal fade" id="domainModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content glass-card border-0">
+            <div class="modal-header border-0">
+                <h6 class="modal-title fw-600" id="domainModalTitle">@(isAr ? "دومين" : "Domain")</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="dId" />
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label fs-xs text-muted">@(isAr ? "الاسم *" : "Name *")</label><input id="dName" class="form-control form-control-sm" /></div>
+                    <div class="col-md-4"><label class="form-label fs-xs text-muted">@(isAr ? "السيرفر *" : "Server *")</label><input id="dServer" class="form-control form-control-sm" placeholder="dc.corp.gov.sa" /></div>
+                    <div class="col-md-2"><label class="form-label fs-xs text-muted">@(isAr ? "المنفذ" : "Port")</label><input id="dPort" type="number" value="389" class="form-control form-control-sm" /></div>
+                    <div class="col-md-12"><label class="form-label fs-xs text-muted">Base DN *</label><input id="dBaseDN" class="form-control form-control-sm" placeholder="DC=corp,DC=gov,DC=sa" /></div>
+                    <div class="col-md-4"><label class="form-label fs-xs text-muted">@(isAr ? "حساب الخدمة" : "Service account")</label><input id="dUsername" class="form-control form-control-sm" autocomplete="off" /></div>
+                    <div class="col-md-4"><label class="form-label fs-xs text-muted">@(isAr ? "كلمة المرور" : "Password")</label><input id="dPassword" type="password" class="form-control form-control-sm" autocomplete="new-password" placeholder="@(isAr ? "فارغ = إبقاء الحالية" : "blank = keep")" /></div>
+                    <div class="col-md-4">
+                        <label class="form-label fs-xs text-muted">@(isAr ? "تشفير القناة" : "Channel security")</label>
+                        <select id="dSecurityMode" class="form-select form-select-sm">
+                            <option value="0">@(isAr ? "تلقائي (حسب المنفذ)" : "Auto (by port)")</option>
+                            <option value="1">@(isAr ? "sign & seal — 389، بلا شهادة" : "Sign & seal — 389, no certificate")</option>
+                            <option value="2">@(isAr ? "LDAPS — 636، يتطلب شهادة" : "LDAPS — 636, needs certificate")</option>
+                            <option value="3">@(isAr ? "StartTLS — 389، يتطلب شهادة" : "StartTLS — 389, needs certificate")</option>
+                            <option value="4">@(isAr ? "بلا تشفير — إعادة التعيين ستفشل" : "No encryption — reset will fail")</option>
+                        </select>
+                    </div>
+                    <div class="col-12 d-flex align-items-center gap-3 flex-wrap">
+                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="dAllowUntrusted" /><label class="form-check-label fs-sm" for="dAllowUntrusted">@(isAr ? "قبول شهادة غير موثوقة (CA داخلي)" : "Accept untrusted certificate (internal CA)")</label></div>
+                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="dIsActive" checked /><label class="form-check-label fs-sm" for="dIsActive">@(isAr ? "نشط" : "Active")</label></div>
+                    </div>
+                    <div class="col-12"><div id="dModeHint" class="alert alert-secondary py-1 px-2 mb-0 fs-xs"></div></div>
+                    <div class="col-md-6"><label class="form-label fs-xs text-muted">@(isAr ? "سمة رقم الهوية الوطنية في AD" : "National-ID AD attribute")</label><input id="dNat" class="form-control form-control-sm" value="employeeNumber" /></div>
+                    <div class="col-md-6"><label class="form-label fs-xs text-muted">@(isAr ? "سمة الجوال في AD" : "Mobile AD attribute")</label><input id="dMobile" class="form-control form-control-sm" value="mobile" /></div>
+                    <div class="col-12"><label class="form-label fs-xs text-muted">@(isAr ? "مجموعات AD المستثناة (مفصولة بفاصلة)" : "Excluded AD groups (comma-separated)")</label><input id="dExcluded" class="form-control form-control-sm" placeholder="Domain Admins, Service-Accounts" /></div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-glow btn-sm" onclick="saveDomain()"><i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ" : "Save")</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/ldap-mode-hint.js"></script>
+<script>
+    let domainModal;
+    document.addEventListener('DOMContentLoaded', () => {
+        domainModal = new bootstrap.Modal(document.getElementById('domainModal'));
+        // Live explanation of the chosen AD channel mode + port (shared with the other screens).
+        bindLdapModeHint({ mode: 'dSecurityMode', port: 'dPort', hint: 'dModeHint', rtl: isRtl });
+    });
+
+    async function post(url, body) {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
+        return res.json();
+    }
+
+    async function saveSettings() {
+        const data = await post('/SsprSettings/SaveSettings', {
+            isEnabled: document.getElementById('sIsEnabled').checked,
+            smsProviderId: document.getElementById('sSmsProvider').value,
+            messageTemplate: document.getElementById('sMessage').value,
+            messageTemplateEn: document.getElementById('sMessageEn').value,
+            newPasswordTemplate: document.getElementById('sPwd').value,
+            newPasswordTemplateEn: document.getElementById('sPwdEn').value,
+            otpLifetimeSeconds: document.getElementById('sOtpLife').value || 300,
+            maxVerifyAttempts: document.getElementById('sMaxAttempts').value || 3,
+            maxRequestsPerIpPerHour: document.getElementById('sMaxIp').value || 5,
+            maxRequestsPerUserPerHour: document.getElementById('sMaxUser').value || 3,
+            maxFailedIdentityAttempts: document.getElementById('sMaxFailed').value || 5,
+            ipBlockDurationHours: document.getElementById('sIpBlockHours').value || 24,
+            maxResetsPerUserPer24h: document.getElementById('sMaxResets24').value || 3
+        });
+        showToast(data.success ? (isRtl ? 'تم الحفظ' : 'Saved') : (data.message || 'Error'), data.success ? 'success' : 'error');
+    }
+
+    async function unblockIp(id) {
+        if (!confirm(isRtl ? 'رفع الحظر عن هذا العنوان؟' : 'Lift the block on this address?')) return;
+        const data = await post('/SsprSettings/UnblockIp', { id: id });
+        showToast(data.success ? (isRtl ? 'تم رفع الحظر' : 'Block lifted') : (data.message || 'Error'), data.success ? 'success' : 'error');
+        if (data.success) location.reload();
+    }
+
+    function editDomain(id, d) {
+        document.getElementById('dId').value = id;
+        document.getElementById('dName').value = d?.Name || '';
+        document.getElementById('dServer').value = d?.AdServer || '';
+        document.getElementById('dPort').value = d?.AdPort || 389;
+        document.getElementById('dBaseDN').value = d?.AdBaseDN || '';
+        document.getElementById('dUsername').value = d?.AdUsername || '';
+        document.getElementById('dPassword').value = '';
+        // Rows saved before the mode existed fall back to the legacy SSL switch.
+        document.getElementById('dSecurityMode').value = d?.AdSecurityModeSet ? String(d.AdSecurityMode) : (d?.AdUseSsl ? '2' : (d ? '1' : '0'));
+        document.getElementById('dAllowUntrusted').checked = d?.AdAllowUntrustedCertificate || false;
+        document.getElementById('dIsActive').checked = d ? d.IsActive : true;
+        document.getElementById('dNat').value = d?.NationalIdAttribute || 'employeeNumber';
+        document.getElementById('dMobile').value = d?.MobileAttribute || 'mobile';
+        document.getElementById('dExcluded').value = d?.ExcludedGroups || '';
+        refreshLdapModeHint();
+        domainModal.show();
+    }
+
+    async function saveDomain() {
+        const body = {
+            id: document.getElementById('dId').value || 0,
+            name: document.getElementById('dName').value,
+            adServer: document.getElementById('dServer').value,
+            adPort: document.getElementById('dPort').value || 389,
+            adSecurityMode: document.getElementById('dSecurityMode').value || 0,
+            adAllowUntrustedCertificate: document.getElementById('dAllowUntrusted').checked,
+            adUsername: document.getElementById('dUsername').value,
+            adPassword: document.getElementById('dPassword').value,
+            adBaseDN: document.getElementById('dBaseDN').value,
+            nationalIdAttribute: document.getElementById('dNat').value,
+            mobileAttribute: document.getElementById('dMobile').value,
+            excludedGroups: document.getElementById('dExcluded').value,
+            isActive: document.getElementById('dIsActive').checked
+        };
+        const data = await post('/SsprSettings/SaveDomain', body);
+        if (data.success) { domainModal.hide(); setTimeout(() => location.reload(), 600); }
+        else showToast(data.message || 'Error', 'error');
+    }
+
+    async function testDomain(id) {
+        showToast(isRtl ? 'جارٍ الاختبار...' : 'Testing...', 'info');
+        const data = await post('/SsprSettings/TestDomain', { id });
+        showToast(data.message, data.success ? 'success' : 'error');
+    }
+
+    async function deleteDomain(id, name) {
+        if (!confirm((isRtl ? 'حذف الدومين ' : 'Delete domain ') + name + '؟')) return;
+        const data = await post('/SsprSettings/DeleteDomain', { id });
+        if (data.success) location.reload();
+        else showToast(data.message || 'Error', 'error');
+    }
+</script>
+}

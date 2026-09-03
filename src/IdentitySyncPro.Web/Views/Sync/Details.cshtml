@@ -1,0 +1,362 @@
+﻿@model IdentitySyncPro.Core.Models.Sync.SyncRun
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? $"عملية المزامنة #{Model.Id}" : $"Sync Run #{Model.Id}";
+    var statusClass = Model.Status.ToString() switch
+    {
+        "Completed" => "badge-success",
+        "CompletedWithErrors" => "badge-warning",
+        "Failed" => "badge-danger",
+        "Running" => "badge-info",
+        "Cancelled" => "badge-muted",
+        _ => "badge-warning"
+    };
+}
+
+<!-- Back Button + Header -->
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div class="d-flex align-items-center gap-3">
+        <a href="@Url.Action("Index", "Sync")" class="btn btn-glass btn-sm">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <div>
+            <h5 class="fw-600 mb-1">@(isAr ? $"عملية المزامنة #{Model.Id}" : $"Sync Run #{Model.Id}")</h5>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge-status @statusClass">@Model.Status</span>
+                <span class="badge-status @(Model.RunType == "Full" ? "badge-purple" : "badge-info")">@(isAr ? (Model.RunType == "Full" ? "كاملة" : "تغييرات") : Model.RunType)</span>
+            </div>
+        </div>
+    </div>
+    <a href="@Url.Action("ExportDetailsExcel", "Sync", new { id = Model.Id })" class="btn btn-glass d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-excel"></i>
+        @(isAr ? "تصدير Excel" : "Export Excel")
+    </a>
+</div>
+
+<!-- Summary Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-active">
+            <div class="stat-label">@(isAr ? "تم إنشاؤها" : "Created")</div>
+            <div class="stat-value">@Model.TotalCreated</div>
+            <div class="fs-xs text-muted">@(isAr ? "حسابات AD جديدة" : "New AD accounts")</div>
+            <i class="bi bi-plus-circle-fill stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-pending">
+            <div class="stat-label">@(isAr ? "تم تحديثها" : "Updated")</div>
+            <div class="stat-value">@Model.TotalUpdated</div>
+            <div class="fs-xs text-muted">@(isAr ? "تغييرات في البيانات" : "Attribute changes")</div>
+            <i class="bi bi-pencil-fill stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-failed">
+            <div class="stat-label">@(isAr ? "فاشلة" : "Failed")</div>
+            <div class="stat-value">@Model.TotalFailed</div>
+            <div class="fs-xs text-muted">@(isAr ? "حدثت أخطاء" : "Errors occurred")</div>
+            <i class="bi bi-x-circle-fill stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-total">
+            <div class="stat-label">@(isAr ? "تمت معالجتها" : "Processed")</div>
+            <div class="stat-value">@Model.TotalProcessed</div>
+            <div class="fs-xs text-muted">@(isAr ? "إجمالي السجلات" : "Total records")</div>
+            <i class="bi bi-check-all stat-bg-icon"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Run Details -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="glass-card h-100">
+            <h6 class="fw-600 mb-3"><i class="bi bi-info-circle me-2 text-accent"></i>@(isAr ? "معلومات العملية" : "Run Information")</h6>
+            <div class="d-flex flex-column gap-3">
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted fs-sm">@(isAr ? "النوع" : "Run Type")</span>
+                    <span class="fw-600">@(isAr ? (Model.RunType == "Full" ? "كاملة" : "تغييرات") : Model.RunType)</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted fs-sm">@(isAr ? "وقت البدء" : "Start Time")</span>
+                    <span>@Model.StartTime.ToString("yyyy-MM-dd HH:mm:ss")</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted fs-sm">@(isAr ? "وقت الانتهاء" : "End Time")</span>
+                    <span>@(Model.EndTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? (isAr ? "لا تزال جارية..." : "Still running..."))</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted fs-sm">@(isAr ? "المدة" : "Duration")</span>
+                    <span class="fw-600">@(Model.Duration?.ToString(@"hh\:mm\:ss") ?? "N/A")</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted fs-sm">@(isAr ? "حجم الدفعة" : "Batch Size")</span>
+                    <span>@Model.BatchSize</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted fs-sm">@(isAr ? "بواسطة" : "Triggered By")</span>
+                    <span>@IdentitySyncPro.Core.Models.Audit.ActorNames.Describe(Model.TriggeredBy, isAr)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="glass-card h-100">
+            <h6 class="fw-600 mb-3"><i class="bi bi-bar-chart me-2 text-accent"></i>@(isAr ? "التفاصيل" : "Breakdown")</h6>
+            <div class="d-flex flex-column gap-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2"><span class="status-dot" style="background:var(--success)"></span><span class="fs-sm">@(isAr ? "تم إنشاؤها" : "Created")</span></div>
+                    <span class="fw-600" style="color:var(--success)">@Model.TotalCreated</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2"><span class="status-dot" style="background:var(--warning)"></span><span class="fs-sm">@(isAr ? "تم تحديثها" : "Updated")</span></div>
+                    <span class="fw-600" style="color:var(--warning)">@Model.TotalUpdated</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2"><span class="status-dot" style="background:var(--danger)"></span><span class="fs-sm">@(isAr ? "فاشلة" : "Failed")</span></div>
+                    <span class="fw-600" style="color:var(--danger)">@Model.TotalFailed</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2"><span class="status-dot" style="background:var(--text-muted)"></span><span class="fs-sm">@(isAr ? "بدون تغيير" : "No Change")</span></div>
+                    <span class="fw-600 text-muted">@Model.TotalNoChange</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2"><span class="status-dot" style="background:var(--info)"></span><span class="fs-sm">@(isAr ? "موجودة مسبقاً" : "Already Existed")</span></div>
+                    <span class="fw-600" style="color:var(--info)">@Model.TotalAlreadyExisted</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2"><span class="status-dot" style="background:var(--accent-primary)"></span><span class="fs-sm">@(isAr ? "تم تخطيها" : "Skipped")</span></div>
+                    <span class="fw-600 text-accent">@Model.TotalSkipped</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Message -->
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="glass-card mb-4" style="border-right:3px solid var(--danger)">
+        <h6 class="fw-600 mb-2" style="color:var(--danger)"><i class="bi bi-exclamation-triangle me-2"></i>@(isAr ? "خطأ" : "Error")</h6>
+        <p class="mb-0 fs-sm text-muted" style="font-family:monospace">@Model.ErrorMessage</p>
+    </div>
+}
+
+<!-- Operations Log -->
+@{
+    var operations = ViewBag.Operations as List<IdentitySyncPro.Core.Models.Sync.SyncOperation> ?? new();
+    int totalOps = ViewBag.TotalOps ?? 0;
+    int currentPage = ViewBag.CurrentPage ?? 1;
+    int totalPages = ViewBag.TotalPages ?? 1;
+    string? opType = ViewBag.OpType;
+    int? identityId = ViewBag.IdentityId;
+}
+
+<div class="glass-card p-0" style="overflow:hidden">
+    <div class="px-4 pt-4 pb-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <h6 class="fw-600 mb-0"><i class="bi bi-journal-text me-2 text-accent"></i>@(isAr ? $"سجل العمليات ({totalOps:N0} سجل)" : $"Operation Log ({totalOps:N0} entries)")</h6>
+        <form method="get" class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="hidden" name="id" value="@Model.Id" />
+            <div class="input-group input-group-sm" style="width:auto; min-width:200px">
+                <span class="input-group-text bg-transparent border-0"><i class="bi bi-search"></i></span>
+                <input type="number" name="identityId" value="@identityId" class="form-control form-control-sm bg-transparent"
+                       placeholder="@(isAr ? "بحث برقم الهوية..." : "Search by Identity ID...")"
+                       style="border-color: rgba(255,255,255,0.1)" />
+                @if (identityId.HasValue)
+                {
+                    <a href="@Url.Action("Details", new { id = Model.Id, opType })" class="btn btn-sm btn-outline-secondary border-0" title="@(isAr ? "مسح البحث" : "Clear")">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                }
+            </div>
+            <select name="opType" class="form-select form-select-sm bg-transparent" style="width:auto" onchange="this.form.submit()">
+                <option value="">@(isAr ? "جميع العمليات" : "All Operations")</option>
+                <option value="Create" selected="@(opType == "Create")">@(isAr ? "إنشاء" : "Create")</option>
+                <option value="Update" selected="@(opType == "Update")">@(isAr ? "تحديث" : "Update")</option>
+                <option value="Sync" selected="@(opType == "Sync")">@(isAr ? "مزامنة" : "Sync")</option>
+            </select>
+        </form>
+    </div>
+    @if (operations.Any())
+    {
+        <table class="table-glass">
+            <thead>
+                <tr>
+                    <th style="width:30px"></th>
+                    <th>@(isAr ? "الوقت" : "Time")</th>
+                    <th>@(isAr ? "رقم الهوية" : "Identity ID")</th>
+                    <th>@(isAr ? "العملية" : "Operation")</th>
+                    <th>@(isAr ? "الحالة" : "Status")</th>
+                    <th>@(isAr ? "ملخص التغييرات" : "Changes Summary")</th>
+                    <th>@(isAr ? "المدة" : "Duration")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{ var rowIdx = 0; }
+                @foreach (var op in operations)
+                {
+                    rowIdx++;
+                    var hasChanges = !string.IsNullOrEmpty(op.ChangedFields) && op.ChangedFields != "NoChanges" && op.ChangedFields != "DryRun" && op.ChangedFields != "AlreadyExisted";
+                    var raw = op.ChangedFields ?? "";
+
+                    // Smart parse: lifecycle uses " → ", AD uses ", " between field:old→new
+                    var isLcFmt = raw.Contains(" → ") && (raw.Contains("Import") || raw.Contains("إزالة") || raw.Contains("نقل") || raw.Contains("Moved") || raw.Contains("Removed") || raw.Contains("RemoveGroups"));
+                    List<string> entries;
+                    if (!hasChanges) { entries = new List<string>(); }
+                    else if (isLcFmt) { entries = raw.Split(new[] { " → " }, StringSplitOptions.RemoveEmptyEntries).ToList(); }
+                    else
+                    {
+                        entries = new List<string>();
+                        var tmp = raw;
+                        while (tmp.Length > 0)
+                        {
+                            var ns = -1; var sf = 0;
+                            while (sf < tmp.Length) { var ix = tmp.IndexOf(", ", sf, StringComparison.Ordinal); if (ix < 0) break; var r = tmp.Substring(ix + 2); if (r.Contains(": ") && r.IndexOf(": ") < (r.Contains("→") ? r.IndexOf("→") : r.Length)) { ns = ix; break; } sf = ix + 2; }
+                            if (ns >= 0) { entries.Add(tmp.Substring(0, ns)); tmp = tmp.Substring(ns + 2); } else { entries.Add(tmp); break; }
+                        }
+                    }
+
+                    var changeCount = entries.Count;
+                    var summaryText = !hasChanges
+                        ? (raw == "NoChanges" ? (isAr ? "بدون تغييرات" : "No changes") : raw == "DryRun" ? (isAr ? "تجريبي" : "Dry Run") : "-")
+                        : (changeCount == 1 ? (entries[0].Length > 45 ? entries[0].Substring(0, 42) + "..." : entries[0]) : (isAr ? $"{changeCount} تغييرات" : $"{changeCount} changes"));
+
+                    <tr class="@(hasChanges ? "expandable-row" : "")" @(hasChanges ? Html.Raw($"data-target=\"d{rowIdx}\" style=\"cursor:pointer\"") : Html.Raw(""))>
+                        <td class="text-center">
+                            @if (hasChanges) { <i class="bi bi-chevron-down expand-icon" id="icon-d@(rowIdx)" style="font-size:0.7rem;color:var(--text-muted);transition:transform 0.2s"></i> }
+                        </td>
+                        <td class="text-muted fs-sm">@op.Timestamp.ToString("HH:mm:ss")</td>
+                        <td class="fw-600"><a href="@Url.Action("Details", "Identity", new { id = op.IdentityId })" class="text-accent text-decoration-none" onclick="event.stopPropagation()">@op.IdentityId</a></td>
+                        <td><span class="badge-status @(op.Operation.ToString() == "Create" ? "badge-success" : op.Operation.ToString() == "Update" ? "badge-warning" : op.Operation.ToString() == "Move" ? "badge-info" : "badge-muted")">@(op.Operation.ToString() == "Create" ? (isAr ? "إنشاء" : "Create") : op.Operation.ToString() == "Update" ? (isAr ? "تحديث" : "Update") : op.Operation.ToString() == "Move" ? (isAr ? "نقل" : "Move") : op.Operation.ToString())</span></td>
+                        <td>
+                            <span class="badge-status @(op.Status.ToString() == "Success" ? "badge-success" : op.Status.ToString() == "Failed" ? "badge-danger" : "badge-muted")">@(op.Status.ToString() == "Success" ? (isAr ? "نجاح" : "Success") : op.Status.ToString() == "Failed" ? (isAr ? "فشل" : "Failed") : op.Status.ToString())</span>
+                            @if (!string.IsNullOrEmpty(op.ErrorMessage)) { <span class="fs-xs text-danger ms-1" title="@op.ErrorMessage"><i class="bi bi-exclamation-triangle"></i></span> }
+                        </td>
+                        <td class="fs-sm">
+                            @if (hasChanges) { <span class="badge bg-opacity-10 bg-info text-info fs-xs"><i class="bi bi-list-ul me-1"></i>@summaryText</span> }
+                            else { <span class="text-muted">@summaryText</span> }
+                        </td>
+                        <td class="text-muted fs-sm">@(op.DurationMs)ms</td>
+                    </tr>
+
+                    @if (hasChanges)
+                    {
+                        <tr id="d@(rowIdx)" class="detail-row" style="display:none">
+                            <td colspan="7" style="padding:0;border:none">
+                                <div class="detail-card">
+                                    <table class="detail-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:30px">#</th>
+                                                <th>@(isAr ? "النوع" : "Type")</th>
+                                                <th>@(isAr ? "التفاصيل" : "Details")</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @{ var sn = 0; }
+                                            @foreach (var entry in entries)
+                                            {
+                                                sn++;
+                                                var t = entry.Trim();
+                                                @if (t.Contains(": ") && t.Contains("→") && !t.StartsWith("Moved") && !t.StartsWith("Removed"))
+                                                {
+                                                    var ci = t.IndexOf(": "); var fn = t.Substring(0, ci).Trim(); var vp = t.Substring(ci + 2);
+                                                    var ai = vp.IndexOf("→"); var ov = ai >= 0 ? vp.Substring(0, ai).Trim() : ""; var nv = ai >= 0 ? vp.Substring(ai + 1).Trim() : vp;
+                                                    if (ov.Contains("System.Byte[]")) ov = "(ثنائي)"; if (nv.Contains("System.Byte[]")) nv = "(ثنائي)";
+                                                    <tr>
+                                                        <td class="text-muted">@sn</td>
+                                                        <td><span class="detail-type detail-type-update"><i class="bi bi-pencil-square"></i> @fn</span></td>
+                                                        <td>
+                                                            <div class="detail-value-row">
+                                                                <span class="detail-old" title="@ov">@(ov.Length > 60 ? ov.Substring(0, 57) + "..." : ov)</span>
+                                                                <i class="bi bi-arrow-right detail-arrow"></i>
+                                                                <span class="detail-new" title="@nv">@(nv.Length > 60 ? nv.Substring(0, 57) + "..." : nv)</span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                                else if (t.Contains("Moved to ") || t.Contains("نقل"))
+                                                {
+                                                    var mi = t.IndexOf("Moved to "); var ouP = mi >= 0 ? t.Substring(mi + 9) : "";
+                                                    var lb = mi > 0 ? t.Substring(0, mi).TrimEnd(' ', ':') : (isAr ? "نقل" : "Move");
+                                                    <tr><td class="text-muted">@sn</td><td><span class="detail-type detail-type-move"><i class="bi bi-arrow-right-circle"></i> @lb</span></td><td><code class="detail-path">@ouP</code></td></tr>
+                                                }
+                                                else if (t.Contains("Removed") || t.Contains("RemoveGroups") || t.Contains("إزالة"))
+                                                {
+                                                    var gn = ""; if (t.Contains("RemoveGroups=")) { gn = t.Substring(t.IndexOf("RemoveGroups=") + 13); }
+                                                    var lb2 = t.Contains(":") ? t.Substring(0, t.IndexOf(":")).Trim() : (isAr ? "إزالة" : "Remove");
+                                                    <tr>
+                                                        <td class="text-muted">@sn</td>
+                                                        <td><span class="detail-type detail-type-remove"><i class="bi bi-x-circle"></i> @lb2</span></td>
+                                                        <td>@if (!string.IsNullOrEmpty(gn)) { <div class="detail-groups">@foreach (var g in gn.Split(',').Select(x => x.Trim()).Where(x => !string.IsNullOrEmpty(x))) { <code class="detail-group">@g</code> }</div> }</td>
+                                                    </tr>
+                                                }
+                                                else if (t == "Import" || t == "استيراد")
+                                                {
+                                                    <tr><td class="text-muted">@sn</td><td><span class="detail-type detail-type-import"><i class="bi bi-download"></i> @(isAr ? "استيراد" : "Import")</span></td><td class="text-muted">@(isAr ? "تم استيراد البيانات" : "Data imported")</td></tr>
+                                                }
+                                                else
+                                                {
+                                                    var ic2 = t.Contains("Added") || t.Contains("Reactivat") ? "bi-plus-circle" : t.Contains("Deprovision") ? "bi-slash-circle" : "bi-info-circle";
+                                                    var cl2 = t.Contains("Added") || t.Contains("Reactivat") ? "detail-type-add" : t.Contains("Deprovision") ? "detail-type-remove" : "detail-type-info";
+                                                    <tr><td class="text-muted">@sn</td><td><span class="detail-type @cl2"><i class="bi @ic2"></i></span></td><td>@t</td></tr>
+                                                }
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        @* Pagination *@
+        @await Html.PartialAsync("_SmartPagination", new ViewDataDictionary(ViewData) {
+            { "PgCurrent", currentPage },
+            { "PgTotal", totalPages },
+            { "PgBaseUrl", Url.Action("Details") + "?" + $"id={Model.Id}&" +
+                (!string.IsNullOrEmpty(opType) ? $"opType={opType}&" : "") +
+                (identityId.HasValue ? $"identityId={identityId}&" : "") +
+                "page=" }
+        })
+    }
+    else
+    {
+        <div class="empty-state">
+            <i class="bi bi-journal-x"></i>
+            <p class="text-muted">@(isAr ? "لا توجد عمليات مسجلة لهذه العملية." : "No operations recorded for this run.")</p>
+        </div>
+    }
+</div>
+
+@section Scripts {
+<script>
+    function toggleDetail(id) {
+        const row = document.getElementById(id);
+        const icon = document.getElementById('icon-' + id);
+        if (!row) return;
+        if (row.style.display === 'none') {
+            row.style.display = '';
+            if (icon) icon.style.transform = 'rotate(180deg)';
+        } else {
+            row.style.display = 'none';
+            if (icon) icon.style.transform = 'rotate(0)';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('tr[data-target]').forEach(function (row) {
+            row.addEventListener('click', function (e) {
+                // Don't toggle if clicking a link inside the row
+                if (e.target.closest('a')) return;
+                var targetId = this.getAttribute('data-target');
+                toggleDetail(targetId);
+            });
+        });
+    });
+</script>
+}

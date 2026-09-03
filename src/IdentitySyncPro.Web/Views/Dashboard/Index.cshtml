@@ -1,0 +1,275 @@
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "لوحة التحكم" : "Dashboard";
+}
+
+<!-- Stats Row -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-total">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-label">@(isAr ? "إجمالي الهويات" : "Total Identities")</div>
+                    <div class="stat-value" id="statTotal">@ViewBag.TotalIdentities</div>
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "جميع السجلات المزامنة" : "All synced records")</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+            </div>
+            <i class="bi bi-people-fill stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-active">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-label">@(isAr ? "نشطة في AD" : "Active in AD")</div>
+                    <div class="stat-value" id="statActive">@ViewBag.ActiveIdentities</div>
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "تم إنشاؤها في Active Directory" : "Created in Active Directory")</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-shield-check"></i></div>
+            </div>
+            <i class="bi bi-shield-check stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-failed">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-label">@(isAr ? "فاشلة" : "Failed")</div>
+                    <div class="stat-value" id="statFailed">@ViewBag.FailedIdentities</div>
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "أخطاء في المزامنة" : "Sync errors")</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+            </div>
+            <i class="bi bi-exclamation-triangle-fill stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-pending">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-label">@(isAr ? "قيد الانتظار" : "Pending")</div>
+                    <div class="stat-value" id="statPending">@ViewBag.PendingIdentities</div>
+                    <div class="fs-xs text-muted mt-1">@(isAr ? "بانتظار المزامنة" : "Awaiting sync")</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
+            </div>
+            <i class="bi bi-hourglass-split stat-bg-icon"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Today's Activity + Last Sync -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="glass-card h-100">
+            <h6 class="fw-600 mb-3"><i class="bi bi-calendar-check me-2 text-accent"></i>@(isAr ? "نشاط اليوم" : "Today's Activity")</h6>
+            <div class="d-flex flex-column gap-3">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="status-dot" style="background:var(--success)"></span>
+                        <span class="fs-sm">@(isAr ? "تم إنشاؤها" : "Created")</span>
+                    </div>
+                    <span class="fw-600 text-gradient">@ViewBag.TodayCreated</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="status-dot" style="background:var(--warning)"></span>
+                        <span class="fs-sm">@(isAr ? "تم تحديثها" : "Updated")</span>
+                    </div>
+                    <span class="fw-600" style="color:var(--warning)">@ViewBag.TodayUpdated</span>
+                </div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="status-dot" style="background:var(--danger)"></span>
+                        <span class="fs-sm">@(isAr ? "فاشلة" : "Failed")</span>
+                    </div>
+                    <span class="fw-600" style="color:var(--danger)">@ViewBag.TodayFailed</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="glass-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="fw-600 mb-0"><i class="bi bi-clock-history me-2 text-accent"></i>@(isAr ? "آخر عملية مزامنة" : "Last Sync Run")</h6>
+                @if (ViewBag.LastSync != null)
+                {
+                    var last = (IdentitySyncPro.Core.Models.Sync.SyncRun)ViewBag.LastSync;
+                    <span class="badge-status @(last.Status.ToString() == "Completed" ? "badge-success" : last.Status.ToString() == "Failed" ? "badge-danger" : "badge-warning")">
+                        @last.Status
+                    </span>
+                }
+            </div>
+            @if (ViewBag.LastSync != null)
+            {
+                var last = (IdentitySyncPro.Core.Models.Sync.SyncRun)ViewBag.LastSync;
+                <div class="row g-3">
+                    <div class="col-md-3 text-center">
+                        <div class="fs-xs text-muted">@(isAr ? "بدأت" : "Started")</div>
+                        <div class="fs-sm fw-600">@last.StartTime.ToString("MMM dd, HH:mm")</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="fs-xs text-muted">@(isAr ? "المدة" : "Duration")</div>
+                        <div class="fs-sm fw-600">@(last.Duration?.ToString(@"hh\:mm\:ss") ?? (isAr ? "جارية..." : "Running..."))</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="fs-xs text-muted">@(isAr ? "إنشاء / تحديث" : "Created / Updated")</div>
+                        <div class="fs-sm fw-600" style="color:var(--success)">@last.TotalCreated / @last.TotalUpdated</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="fs-xs text-muted">@(isAr ? "فاشلة" : "Failed")</div>
+                        <div class="fs-sm fw-600" style="color:var(--danger)">@last.TotalFailed</div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state py-3">
+                    <p class="mb-0 text-muted">@(isAr ? "لا توجد عمليات مزامنة بعد" : "No sync runs yet")</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Chart + Recent Sync Runs -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="glass-card">
+            <h6 class="fw-600 mb-3"><i class="bi bi-graph-up me-2 text-accent"></i>@(isAr ? "نشاط المزامنة - 7 أيام" : "7-Day Sync Activity")</h6>
+            <div class="chart-container">
+                <canvas id="syncChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="glass-card h-100">
+            <h6 class="fw-600 mb-3"><i class="bi bi-list-check me-2 text-accent"></i>@(isAr ? "آخر عمليات المزامنة" : "Recent Sync Runs")</h6>
+            @if (ViewBag.RecentRuns != null)
+            {
+                var runs = (List<IdentitySyncPro.Core.Models.Sync.SyncRun>)ViewBag.RecentRuns;
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var run in runs)
+                    {
+                        <div class="d-flex align-items-center justify-content-between p-2 rounded" style="background:rgba(255,255,255,0.02)">
+                            <div>
+                                <div class="fs-sm fw-600">@(isAr ? (run.RunType == "Full" ? "مزامنة كاملة" : "مزامنة تغييرات") : $"{run.RunType} Sync")</div>
+                                <div class="fs-xs text-muted">@run.StartTime.ToString("MMM dd, HH:mm")</div>
+                            </div>
+                            <span class="badge-status @(run.Status.ToString() == "Completed" ? "badge-success" : run.Status.ToString() == "Failed" ? "badge-danger" : "badge-warning") fs-xs">
+                                @run.Status
+                            </span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity Stream -->
+<div class="glass-card">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-600 mb-0"><i class="bi bi-activity me-2 text-accent"></i>@(isAr ? "النشاط الأخير" : "Recent Activity")</h6>
+        <a href="@Url.Action("Index", "Audit")" class="btn btn-glass btn-sm">@(isAr ? "عرض الكل" : "View All")</a>
+    </div>
+    @if (ViewBag.RecentActivity != null)
+    {
+        var activities = (List<IdentitySyncPro.Core.Models.Sync.SyncOperation>)ViewBag.RecentActivity;
+        if (activities.Count > 0)
+        {
+            <table class="table-glass">
+                <thead>
+                    <tr>
+                        <th>@(isAr ? "الوقت" : "Time")</th>
+                        <th>@(isAr ? "رقم الهوية" : "Identity ID")</th>
+                        <th>@(isAr ? "العملية" : "Operation")</th>
+                        <th>@(isAr ? "الحالة" : "Status")</th>
+                        <th>@(isAr ? "التغييرات" : "Changes")</th>
+                        <th>@(isAr ? "المدة" : "Duration")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in activities)
+                    {
+                        <tr>
+                            <td class="text-muted">@a.Timestamp.ToString("HH:mm:ss")</td>
+                            <td class="fw-600">@a.IdentityId</td>
+                            <td>
+                                <span class="badge-status @(a.Operation.ToString() == "Create" ? "badge-success" : "badge-info")">
+                                    @a.Operation
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge-status @(a.Status.ToString() == "Success" ? "badge-success" : "badge-danger")">
+                                    @a.Status
+                                </span>
+                            </td>
+                            <td class="text-muted fs-sm">@(a.ChangedFields ?? "-")</td>
+                            <td class="text-muted">@(a.DurationMs)ms</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="empty-state">
+                <i class="bi bi-inbox"></i>
+                <p>@(isAr ? "لا يوجد نشاط مسجل بعد. ابدأ عملية مزامنة لمشاهدة النتائج." : "No activity recorded yet. Start a sync to see results.")</p>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+<script>
+    // 7-Day Chart
+    const ctx = document.getElementById('syncChart');
+    if (ctx) {
+        const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ChartLabels ?? new List<string>()));
+        const created = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ChartCreated ?? new List<int>()));
+        const updated = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ChartUpdated ?? new List<int>()));
+        const failed = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ChartFailed ?? new List<int>()));
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels.length ? labels : [isRtl ? 'لا توجد بيانات' : 'No Data'],
+                datasets: [
+                    {
+                        label: isRtl ? 'إنشاء' : 'Created',
+                        data: created,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true, tension: 0.4, borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#10b981'
+                    },
+                    {
+                        label: isRtl ? 'تحديث' : 'Updated',
+                        data: updated,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        fill: true, tension: 0.4, borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#f59e0b'
+                    },
+                    {
+                        label: isRtl ? 'فشل' : 'Failed',
+                        data: failed,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: true, tension: 0.4, borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#ef4444'
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'top', labels: { color: '#94a3b8', font: { family: isRtl ? 'Cairo' : 'Inter', size: 12 }, usePointStyle: true, padding: 20 } } },
+                scales: {
+                    x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { family: isRtl ? 'Cairo' : 'Inter', size: 11 } } },
+                    y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { family: isRtl ? 'Cairo' : 'Inter', size: 11 } }, beginAtZero: true }
+                }
+            }
+        });
+    }
+</script>
+}

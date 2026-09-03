@@ -1,0 +1,350 @@
+@model IEnumerable<IdentitySyncPro.Core.Models.Settings.AppUser>
+@inject IdentitySyncPro.Core.Models.Settings.PasswordPolicy PasswordPolicy
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "مستخدمو النظام" : "Console Users";
+    var adUsers = Model.Count(u => u.AuthType == "ActiveDirectory" && u.IsActive);
+    var signInDomains = (int)(ViewBag.SignInDomainCount ?? 0);
+    var nowUtc = DateTime.UtcNow;
+    var mfa = ViewBag.MfaSettings as IdentitySyncPro.Core.Models.Settings.MfaSettings
+              ?? new IdentitySyncPro.Core.Models.Settings.MfaSettings();
+    var mfaRoles = (mfa.RequiredRoles ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+<!-- MFA policy -->
+<div class="glass-card mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+            <h6 class="fw-600 mb-1">
+                <i class="bi bi-shield-lock-fill me-2 text-accent"></i>@(isAr ? "التحقق بخطوتين (MFA)" : "Two-factor authentication")
+                <span class="badge-status @(mfa.IsEnabled ? "badge-success" : "badge-muted") ms-2">
+                    @(mfa.IsEnabled ? (isAr ? "مفعّل" : "Enabled") : (isAr ? "معطّل" : "Disabled"))
+                </span>
+            </h6>
+            <p class="fs-sm text-muted mb-0">
+                @(isAr
+                    ? "عامل ثانٍ (TOTP) للحسابات ذات الصلاحيات. يعمل بلا إنترنت وبلا رسائل نصية."
+                    : "A second factor (TOTP) for privileged accounts. Works offline, with no SMS.")
+            </p>
+        </div>
+    </div>
+
+    <hr style="border-color:rgba(255,255,255,0.06);margin:12px 0">
+
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label fs-xs text-muted">@(isAr ? "الحالة" : "State")</label>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="mfaEnabled" @(mfa.IsEnabled ? "checked" : "") />
+                <label class="form-check-label fs-sm" for="mfaEnabled">@(isAr ? "تفعيل التحقق بخطوتين" : "Enable two-factor")</label>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fs-xs text-muted">@(isAr ? "يُطبَّق على الأدوار" : "Applies to roles")</label>
+            <div class="d-flex gap-3">
+                @foreach (var r in IdentitySyncPro.Core.Models.Settings.AppUserRoles.All)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input mfaRole" type="checkbox" value="@r" id="mfaRole_@r"
+                               @(mfaRoles.Contains(r, StringComparer.OrdinalIgnoreCase) ? "checked" : "") />
+                        <label class="form-check-label fs-sm" for="mfaRole_@r">
+                            @(isAr ? (r == "Admin" ? "مدير" : r == "Operator" ? "مشغّل" : "مشاهد") : r)
+                        </label>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fs-xs text-muted">@(isAr ? "التسجيل" : "Enrollment")</label>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="mfaEnforce" @(mfa.EnforceEnrollment ? "checked" : "") />
+                <label class="form-check-label fs-sm" for="mfaEnforce">
+                    @(isAr ? "إلزام غير المسجَّلين" : "Force unenrolled users")
+                </label>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-glow btn-sm w-100" onclick="saveMfaSettings()">
+                <i class="bi bi-save me-1"></i> @(isAr ? "حفظ" : "Save")
+            </button>
+        </div>
+    </div>
+
+    <div class="fs-xs text-muted mt-2">
+        @(isAr
+            ? "«إلزام غير المسجَّلين» مغلقاً يعني أن من لم يسجّل بعد يدخل كالمعتاد — مفيد لتفعيل تدريجي على فريق قائم. عند التسجيل تُعرض عشرة رموز استرداد مرة واحدة، وهي الطريقة الوحيدة للدخول عند فقد الجهاز."
+            : "With \"force unenrolled users\" off, users who have not enrolled sign in normally — useful for a phased rollout. Enrollment shows ten recovery codes once; they are the only way in if a device is lost.")
+    </div>
+</div>
+
+<div class="glass-card mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+            <h6 class="fw-600 mb-1"><i class="bi bi-people-fill me-2 text-accent"></i>@(isAr ? "مستخدمو النظام" : "Console Users")</h6>
+            <p class="fs-sm text-muted mb-0">@(isAr ? "إدارة حسابات الدخول للوحة التحكم وصلاحياتها" : "Manage console accounts and their roles")</p>
+        </div>
+        <a class="btn btn-glass btn-sm" asp-action="Domains">
+            <i class="bi bi-diagram-3-fill me-1"></i> @(isAr ? "دومينات الدخول" : "Sign-in domains")
+            <span class="badge-status @(signInDomains > 0 ? "badge-muted" : "badge-warning") ms-1">@signInDomains</span>
+        </a>
+    </div>
+
+    @if (adUsers > 0 && signInDomains == 0)
+    {
+        <div class="alert alert-danger py-2 px-3 mt-3 mb-0 fs-sm">
+            <i class="bi bi-exclamation-octagon-fill me-1"></i>
+            @(isAr
+                ? $"يوجد {adUsers} مستخدم يدخل بحساب الدومين، ولم يُضبط أي دومين دخول — لن يستطيعوا الدخول."
+                : $"{adUsers} user(s) sign in with a domain account but no sign-in domain is configured — they cannot sign in.")
+            <a asp-action="Domains" class="alert-link">@(isAr ? "اضبطه الآن" : "Configure it now")</a>
+        </div>
+    }
+
+    <hr style="border-color:rgba(255,255,255,0.06);margin:12px 0">
+
+    <!-- Add user -->
+    <div class="row g-2 align-items-end">
+        <div class="col-md-2"><label class="form-label fs-xs text-muted">@(isAr ? "اسم المستخدم" : "Username")</label><input id="nuUsername" class="form-control form-control-sm" /></div>
+        <div class="col-md-2"><label class="form-label fs-xs text-muted">@(isAr ? "الاسم الظاهر" : "Display Name")</label><input id="nuDisplay" class="form-control form-control-sm" /></div>
+        <div class="col-md-2">
+            <label class="form-label fs-xs text-muted">@(isAr ? "الدور" : "Role")</label>
+            <select id="nuRole" class="form-select form-select-sm">
+                <option value="Admin">@(isAr ? "مدير" : "Admin")</option>
+                <option value="Operator" selected>@(isAr ? "مشغّل" : "Operator")</option>
+                <option value="Viewer">@(isAr ? "مشاهد" : "Viewer")</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label fs-xs text-muted">@(isAr ? "نوع الدخول" : "Auth Type")</label>
+            <select id="nuAuth" class="form-select form-select-sm" onchange="onAuthTypeChange()">
+                <option value="Local" selected>@(isAr ? "محلي" : "Local")</option>
+                <option value="ActiveDirectory">Active Directory</option>
+            </select>
+        </div>
+        <div class="col-md-2" id="nuPwdWrap"><label class="form-label fs-xs text-muted">@(isAr ? "كلمة مرور مؤقتة" : "Temp Password")</label><input id="nuPassword" type="password" class="form-control form-control-sm" autocomplete="new-password" /></div>
+        <!-- Replaces the password box for AD users so it is obvious no password is stored -->
+        <div class="col-md-2" id="nuAdNote" style="display:none">
+            <label class="form-label fs-xs text-muted">&nbsp;</label>
+            <div class="alert alert-info py-1 px-2 mb-0 fs-xs">
+                <i class="bi bi-shield-lock me-1"></i>@(isAr ? "بلا كلمة مرور — يدخل بكلمة مرور الدومين" : "No password — signs in with the domain password")
+            </div>
+        </div>
+        <div class="col-md-2"><button class="btn btn-glow btn-sm w-100" onclick="createUser()"><i class="bi bi-plus-lg me-1"></i> @(isAr ? "إضافة" : "Add")</button></div>
+    </div>
+    <div class="fs-xs text-muted mt-2">@(isAr
+        ? "المستخدم المحلي يُجبر على تغيير كلمة المرور عند أول دخول. مستخدم AD: اسم المستخدم يجب أن يطابق sAMAccountName في الدومين، ولا تُخزَّن له كلمة مرور — يتحقق النظام من AD لحظياً، فتغيير كلمة المرور في الدومين لا يتطلّب أي إجراء هنا."
+        : "Local users must change password at first login. AD users: the username must match the domain sAMAccountName, and no password is stored — the system verifies against AD live, so changing the domain password needs no action here.")</div>
+</div>
+
+<div class="glass-card p-0" style="overflow:hidden">
+    <table class="table-glass">
+        <thead>
+            <tr>
+                <th>@(isAr ? "المستخدم" : "Username")</th>
+                <th>@(isAr ? "الاسم" : "Name")</th>
+                <th>@(isAr ? "الدور" : "Role")</th>
+                <th>@(isAr ? "الدخول" : "Auth")</th>
+                <th>@(isAr ? "الحالة" : "Status")</th>
+                <th>@(isAr ? "كلمة المرور" : "Password")</th>
+                <th>MFA</th>
+                <th>@(isAr ? "آخر دخول" : "Last Login")</th>
+                <th>@(isAr ? "إجراءات" : "Actions")</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in Model)
+            {
+                <tr data-id="@u.Id">
+                    <td class="fw-600">@u.Username</td>
+                    <td class="text-muted">@u.DisplayName</td>
+                    <td>
+                        <select class="form-select form-select-sm rowRole" style="width:auto" data-orig="@u.Role">
+                            @foreach (var r in IdentitySyncPro.Core.Models.Settings.AppUserRoles.All)
+                            {
+                                <option value="@r" selected="@(u.Role == r)">@(isAr ? (r == "Admin" ? "مدير" : r == "Operator" ? "مشغّل" : "مشاهد") : r)</option>
+                            }
+                        </select>
+                    </td>
+                    <td><span class="badge-status @(u.AuthType == "Local" ? "badge-muted" : "badge-info")">@(u.AuthType == "Local" ? (isAr ? "محلي" : "Local") : "AD")</span></td>
+                    <td><span class="badge-status @(u.IsActive ? "badge-success" : "badge-danger")">@(u.IsActive ? (isAr ? "نشط" : "Active") : (isAr ? "معطل" : "Disabled"))</span></td>
+                    <td class="fs-sm">
+                        @{
+                            var isLocalUser = u.AuthType == IdentitySyncPro.Core.Models.Settings.AppUserAuthTypes.Local;
+                            var daysLeft = PasswordPolicy.DaysRemaining(u.PasswordChangedUtc, isLocalUser, nowUtc);
+                        }
+                        @if (!isLocalUser)
+                        {
+                            <span class="text-muted" title="@(isAr ? "كلمة المرور تُدار في الدومين" : "Managed by the domain")">—</span>
+                        }
+                        else if (u.MustChangePassword)
+                        {
+                            <span class="badge-status badge-warning">@(isAr ? "تغيير مطلوب" : "Change required")</span>
+                        }
+                        else if (daysLeft == null)
+                        {
+                            <span class="text-muted">@(isAr ? "بلا انتهاء" : "No expiry")</span>
+                        }
+                        else if (daysLeft <= 0)
+                        {
+                            <span class="badge-status badge-danger">@(isAr ? "منتهية" : "Expired")</span>
+                        }
+                        else
+                        {
+                            <span class="badge-status @(daysLeft <= 14 ? "badge-warning" : "badge-muted")">
+                                @(isAr ? $"{daysLeft} يوم" : $"{daysLeft} d")
+                            </span>
+                        }
+                    </td>
+                    <td class="fs-sm">
+                        @{
+                            var mfaApplies = mfa.AppliesToRole(u.Role);
+                            var remaining = IdentitySyncPro.Infrastructure.Services.MfaService.CountRemainingRecoveryCodes(u);
+                        }
+                        @if (u.IsMfaEnrolled)
+                        {
+                            <span class="badge-status badge-success"
+                                  title="@(isAr ? $"رموز استرداد متبقية: {remaining}" : $"{remaining} recovery codes left")">
+                                <i class="bi bi-shield-check"></i> @(isAr ? "مسجَّل" : "Enrolled")
+                            </span>
+                            @if (remaining == 0)
+                            {
+                                <span class="badge-status badge-warning ms-1"
+                                      title="@(isAr ? "لا رموز استرداد — فقدان الجهاز يتطلّب إلغاء التسجيل من هنا" : "No recovery codes left — a lost device needs a reset from here")">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </span>
+                            }
+                        }
+                        else if (mfaApplies)
+                        {
+                            <span class="badge-status badge-warning">@(isAr ? "مطلوب" : "Required")</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td class="text-muted fs-sm">@(u.LastLoginUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                    <td class="d-flex gap-1">
+                        <button class="btn btn-glass btn-sm" title="@(isAr ? "حفظ الدور/الاسم" : "Save role")" onclick="updateUser(@u.Id, this)"><i class="bi bi-check-lg"></i></button>
+                        <button class="btn btn-glass btn-sm" title="@(isAr ? "إعادة تسمية الحساب" : "Rename account")" onclick="renameUser(@u.Id, this)"><i class="bi bi-input-cursor-text"></i></button>
+                        @if (u.AuthType == "Local")
+                        {
+                            <button class="btn btn-glass btn-sm" title="@(isAr ? "إعادة تعيين كلمة المرور" : "Reset password")" onclick="resetPassword(@u.Id, '@u.Username')"><i class="bi bi-key"></i></button>
+                        }
+                        @if (u.IsMfaEnrolled)
+                        {
+                            <button class="btn btn-glass btn-sm" title="@(isAr ? "إلغاء تسجيل MFA (جهاز مفقود)" : "Reset MFA (lost device)")" onclick="resetMfa(@u.Id, this)"><i class="bi bi-shield-slash"></i></button>
+                        }
+                        <button class="btn btn-glass btn-sm" title="@(isAr ? "تفعيل/تعطيل" : "Toggle active")" onclick="toggleActive(@u.Id)"><i class="bi bi-power"></i></button>
+                        <button class="btn btn-danger-glass btn-sm" title="@(isAr ? "حذف" : "Delete")" onclick="deleteUser(@u.Id, '@u.Username')"><i class="bi bi-trash3"></i></button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+<script>
+    async function post(url, body) {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
+        return res.json();
+    }
+
+    // AD users need no password: swap the password box for an explanatory note.
+    function onAuthTypeChange() {
+        const isLocal = document.getElementById('nuAuth').value === 'Local';
+        document.getElementById('nuPwdWrap').style.display = isLocal ? '' : 'none';
+        document.getElementById('nuAdNote').style.display = isLocal ? 'none' : '';
+        if (!isLocal) document.getElementById('nuPassword').value = '';
+    }
+
+    async function createUser() {
+        const body = {
+            username: document.getElementById('nuUsername').value.trim(),
+            displayName: document.getElementById('nuDisplay').value.trim(),
+            role: document.getElementById('nuRole').value,
+            authType: document.getElementById('nuAuth').value,
+            // Ignored by the server for AD users (no password is ever stored for them)
+            password: document.getElementById('nuPassword').value
+        };
+        if (!body.username) { showToast(isRtl ? 'أدخل اسم المستخدم' : 'Enter username', 'warning'); return; }
+        const data = await post('/Users/Create', body);
+        if (data.success) { showToast(isRtl ? 'تمت الإضافة' : 'Created', 'success'); setTimeout(() => location.reload(), 800); }
+        else showToast(data.message, 'error');
+    }
+
+    async function updateUser(id, btn) {
+        const row = btn.closest('tr');
+        const role = row.querySelector('.rowRole').value;
+        const displayName = row.children[1].textContent.trim();
+        const data = await post('/Users/Update', { id, displayName, role });
+        if (data.success) showToast(isRtl ? 'تم الحفظ' : 'Saved', 'success');
+        else showToast(data.message, 'error');
+    }
+
+    async function resetPassword(id, username) {
+        const pwd = prompt((isRtl ? 'كلمة مرور مؤقتة جديدة لـ ' : 'New temporary password for ') + username + '\n(10+ ' + (isRtl ? 'أحرف، حروف وأرقام' : 'chars, letters & digits') + ')');
+        if (!pwd) return;
+        const data = await post('/Users/ResetPassword', { id, newPassword: pwd });
+        if (data.success) showToast(isRtl ? 'تمت إعادة التعيين — سيُجبر على تغييرها عند الدخول' : 'Reset — user must change it at login', 'success');
+        else showToast(data.message, 'error');
+    }
+
+    async function saveMfaSettings() {
+        const isEnabled = document.getElementById('mfaEnabled').checked;
+        const enforce = document.getElementById('mfaEnforce').checked;
+        const roles = Array.from(document.querySelectorAll('.mfaRole:checked')).map(e => e.value).join(',');
+
+        // Turning it on is the moment someone can get locked out; make it a deliberate click.
+        if (isEnabled && !confirm(isRtl
+            ? 'سيُطلب التحقق بخطوتين من الأدوار المحددة عند الدخول القادم. تأكد من قدرتك على استخدام تطبيق مصادقة. متابعة؟'
+            : 'The selected roles will be asked for a second factor at next sign-in. Make sure you can use an authenticator app. Continue?')) return;
+
+        const data = await post('/Users/SaveMfaSettings', { isEnabled, requiredRoles: roles, enforceEnrollment: enforce });
+        if (data.success) { showToast(isRtl ? 'تم حفظ سياسة التحقق بخطوتين' : 'MFA policy saved', 'success'); setTimeout(() => location.reload(), 900); }
+        else showToast(data.message, 'error');
+    }
+
+    async function resetMfa(id, btn) {
+        const row = btn.closest('tr');
+        const username = row.children[0].textContent.trim();
+        if (!confirm((isRtl ? 'إلغاء تسجيل التحقق بخطوتين للمستخدم ' : 'Reset two-factor for ') + username +
+                     (isRtl ? '؟\nسيُطلب منه التسجيل من جديد عند الدخول.' : '?\nThey will be asked to enroll again at next sign-in.'))) return;
+        const data = await post('/Users/ResetMfa', { id });
+        if (data.success) { showToast(data.message, 'success'); setTimeout(() => location.reload(), 900); }
+        else showToast(data.message, 'error');
+    }
+
+    // Reads the current name from the row rather than being handed it inline, so a username
+    // containing a quote cannot break out of a generated JavaScript string literal.
+    async function renameUser(id, btn) {
+        const row = btn.closest('tr');
+        const current = row.children[0].textContent.trim();
+
+        const next = prompt((isRtl ? 'الاسم الجديد للحساب ' : 'New name for account ') + current, current);
+        if (next === null) return;
+        if (!next.trim() || next.trim() === current) return;
+
+        const data = await post('/Users/Rename', { id, newUsername: next.trim() });
+        if (!data.success) { showToast(data.message, 'error'); return; }
+
+        if (data.warning) showToast(data.warning, 'warning');
+        showToast(data.message, 'success');
+        setTimeout(() => location.reload(), data.selfRenamed ? 2500 : 800);
+    }
+
+    async function toggleActive(id) {
+        const data = await post('/Users/ToggleActive', { id });
+        if (data.success) location.reload();
+        else showToast(data.message, 'error');
+    }
+
+    async function deleteUser(id, username) {
+        if (!confirm((isRtl ? 'حذف المستخدم ' : 'Delete user ') + username + '؟')) return;
+        const data = await post('/Users/Delete', { id });
+        if (data.success) location.reload();
+        else showToast(data.message, 'error');
+    }
+</script>
+}

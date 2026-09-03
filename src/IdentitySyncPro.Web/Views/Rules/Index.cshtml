@@ -1,0 +1,412 @@
+@model List<IdentitySyncPro.Core.Models.Rules.SyncRuleV2>
+@{
+    ViewData["Title"] = ViewBag.Lang == "en" ? "Rules Engine" : "محرك القواعد";
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    var stats = ViewBag.Stats as IdentitySyncPro.Core.Interfaces.RulesStats;
+    var selectedType = ViewBag.SelectedType as string;
+    var ruleTypes = new[] { "Join", "Projection", "ImportFlow", "ExportFlow", "Provisioning", "Deprovisioning" };
+    var ruleIcons = new Dictionary<string, string> {
+        {"Join","bi-link-45deg"},{"Projection","bi-box-arrow-in-down"},{"ImportFlow","bi-arrow-down-circle"},
+        {"ExportFlow","bi-arrow-up-circle"},{"Provisioning","bi-plus-circle"},{"Deprovisioning","bi-dash-circle"}
+    };
+    var ruleColors = new Dictionary<string, string> {
+        {"Join","info"},{"Projection","primary"},{"ImportFlow","success"},
+        {"ExportFlow","warning"},{"Provisioning","cyan"},{"Deprovisioning","danger"}
+    };
+    // Multi-tenant: each tenant keeps its own rule set. Null = viewing all tenants.
+    var tenants = ViewBag.Tenants as List<(int Id, string TenantName, bool IsActive)> ?? new List<(int, string, bool)>();
+    var tenantNames = ViewBag.TenantNames as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var selectedTenantId = ViewBag.TenantId as int?;
+    var showTenant = tenants.Count > 1;
+}
+
+@if (showTenant)
+{
+    <div class="card glass-card border-0 mb-3">
+        <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+            <span class="fs-sm text-muted">
+                <i class="bi bi-building me-1"></i>@(isAr ? "الجهة" : "Tenant")
+            </span>
+            <select class="form-select form-select-sm form-glass" style="width:auto"
+                    onchange="location.href='@Url.Action("Index")?type=@selectedType&tenantId=' + this.value">
+                <option value="">@(isAr ? "كل الجهات" : "All Tenants")</option>
+                @foreach (var t in tenants)
+                {
+                    <option value="@t.Id" selected="@(selectedTenantId == t.Id)">
+                        @t.TenantName@(t.IsActive ? "" : isAr ? " (غير نشطة)" : " (inactive)")
+                    </option>
+                }
+            </select>
+            <small class="text-muted">
+                @(isAr
+                    ? "لكل جهة قواعدها المستقلة — الأرقام والقائمة أدناه تتبع هذا الاختيار."
+                    : "Each tenant has its own rule set — the counters and list below follow this selection.")
+            </small>
+        </div>
+    </div>
+}
+
+<!-- Stats Cards -->
+<div class="row g-3 mb-4">
+    @foreach (var rt in ruleTypes)
+    {
+        var count = rt switch {
+            "Join" => stats?.JoinRules ?? 0,
+            "Projection" => stats?.ProjectionRules ?? 0,
+            "ImportFlow" => stats?.ImportFlowRules ?? 0,
+            "ExportFlow" => stats?.ExportFlowRules ?? 0,
+            "Provisioning" => stats?.ProvisioningRules ?? 0,
+            "Deprovisioning" => stats?.DeprovisioningRules ?? 0,
+            _ => 0
+        };
+        <div class="col-md-2">
+            <a href="@Url.Action("Index", new { type = rt, tenantId = selectedTenantId })" class="text-decoration-none">
+                <div class="card glass-card border-0 h-100 @(selectedType == rt ? "border border-primary" : "")">
+                    <div class="card-body text-center p-3">
+                        <i class="bi @ruleIcons[rt] text-@ruleColors[rt] fs-4"></i>
+                        <h4 class="mb-0 mt-1">@count</h4>
+                        <small class="text-muted">@rt</small>
+                    </div>
+                </div>
+            </a>
+        </div>
+    }
+</div>
+
+<div class="row g-4">
+    <!-- Rules List -->
+    <div class="col-lg-8">
+        <div class="card glass-card border-0">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-kanban-fill me-2"></i>
+                    @(isAr ? "القواعد" : "Rules")
+                    @if (!string.IsNullOrEmpty(selectedType))
+                    {
+                        <span class="badge bg-primary ms-2">@selectedType</span>
+                    }
+                    <small class="text-muted ms-2">(@(stats?.EnabledRules ?? 0) / @(stats?.TotalRules ?? 0))</small>
+                </h5>
+                <div>
+                    @if (!string.IsNullOrEmpty(selectedType))
+                    {
+                        <a href="@Url.Action("Index", new { tenantId = selectedTenantId })" class="btn btn-sm btn-outline-secondary me-2">
+                            <i class="bi bi-x-lg"></i> @(isAr ? "إلغاء الفلتر" : "Clear")
+                        </a>
+                    }
+                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#ruleModal" onclick="openRuleModal()">
+                        <i class="bi bi-plus-lg"></i> @(isAr ? "إضافة قاعدة" : "Add Rule")
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Count == 0)
+                {
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1"></i>
+                        <p class="mt-2">@(isAr ? "لا توجد قواعد" : "No rules defined")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush" id="rulesList">
+                        @foreach (var rule in Model)
+                        {
+                            var icon = ruleIcons.GetValueOrDefault(rule.RuleType, "bi-gear");
+                            var color = ruleColors.GetValueOrDefault(rule.RuleType, "secondary");
+                            <div class="list-group-item bg-transparent" data-rule-id="@rule.Id">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="drag-handle text-muted" style="cursor:grab" title="Drag to reorder">
+                                        <i class="bi bi-grip-vertical"></i>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" @(rule.Enabled ? "checked" : "")
+                                               onchange="toggleRule(@rule.Id)">
+                                    </div>
+                                    <span class="badge bg-@color" style="@(color == "cyan" ? "background-color:#0dcaf0!important;color:#000!important;" : "")">
+                                        <i class="bi @icon me-1"></i>@rule.RuleType
+                                    </span>
+                                    <div class="flex-grow-1">
+                                        <strong>@rule.Name</strong>
+                                        @if (showTenant)
+                                        {
+                                            <span class="badge bg-secondary ms-2" title="@(isAr ? "الجهة" : "Tenant")">
+                                                <i class="bi bi-building me-1"></i>@(tenantNames.GetValueOrDefault(rule.TenantId) ?? "—")
+                                            </span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(rule.Description))
+                                        {
+                                            <br><small class="text-muted">@rule.Description</small>
+                                        }
+                                    </div>
+                                    <div class="text-end">
+                                        <small class="text-muted d-block">P@rule.Priority</small>
+                                        <small class="text-muted">@rule.Direction</small>
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-info" title="@(isAr ? "تعديل" : "Edit")"
+                                                onclick="editRule(@rule.Id, '@System.Web.HttpUtility.JavaScriptStringEncode(rule.Name)', '@System.Web.HttpUtility.JavaScriptStringEncode(rule.Description ?? "")', @rule.Priority, '@rule.RuleType', '@rule.Direction', '@System.Web.HttpUtility.JavaScriptStringEncode(rule.ScopeFilter ?? "")', '@System.Web.HttpUtility.JavaScriptStringEncode(rule.ConfigurationJson ?? "{}")', @rule.TenantId)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" onclick="deleteRule(@rule.Id)" title="@(isAr ? "حذف" : "Delete")">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                @if (rule.FlowMappings.Any())
+                                {
+                                    <div class="mt-2 ps-5">
+                                        <small class="text-muted">@(isAr ? "تعيينات:" : "Mappings:")</small>
+                                        @foreach (var m in rule.FlowMappings.Take(5))
+                                        {
+                                            <span class="badge bg-dark me-1">@m.SourceAttribute → @m.TargetAttribute</span>
+                                        }
+                                        @if (rule.FlowMappings.Count > 5)
+                                        {
+                                            <span class="badge bg-secondary">+@(rule.FlowMappings.Count - 5)</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Pipeline Preview -->
+    <div class="col-lg-4">
+        <div class="card glass-card border-0">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-diagram-2 me-2"></i>@(isAr ? "خط الأنابيب" : "Pipeline")</h5>
+            </div>
+            <div class="card-body">
+                <div class="pipeline-flow">
+                    @foreach (var rt in ruleTypes)
+                    {
+                        var count = rt switch {
+                            "Join" => stats?.JoinRules ?? 0,
+                            "Projection" => stats?.ProjectionRules ?? 0,
+                            "ImportFlow" => stats?.ImportFlowRules ?? 0,
+                            "ExportFlow" => stats?.ExportFlowRules ?? 0,
+                            "Provisioning" => stats?.ProvisioningRules ?? 0,
+                            "Deprovisioning" => stats?.DeprovisioningRules ?? 0,
+                            _ => 0
+                        };
+                        var icon = ruleIcons[rt];
+                        var color = ruleColors[rt];
+                        <div class="pipeline-step mb-2 p-2 rounded @(count > 0 ? "border border-" + color : "")" style="background:rgba(255,255,255,0.03)">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi @icon text-@color"></i>
+                                <span class="flex-grow-1">@rt</span>
+                                <span class="badge bg-@color">@count</span>
+                            </div>
+                        </div>
+                        @if (rt != "Deprovisioning")
+                        {
+                            <div class="text-center text-muted mb-2"><i class="bi bi-arrow-down"></i></div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Card -->
+        <div class="card glass-card border-0 mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-eye me-2"></i>@(isAr ? "معاينة القاعدة" : "Rule Preview")</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label small">@(isAr ? "رقم الهوية" : "Identity ID")</label>
+                    <input type="number" class="form-control form-control-sm" id="previewIdentityId" placeholder="441234567">
+                </div>
+                <button class="btn btn-sm btn-outline-info w-100" onclick="previewRules()">
+                    <i class="bi bi-play-fill me-1"></i>@(isAr ? "معاينة" : "Preview")
+                </button>
+                <div id="previewResult" class="mt-3" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Rule Modal -->
+<div class="modal fade" id="ruleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ruleModalTitle"><i class="bi bi-plus-circle me-2"></i>@(isAr ? "إضافة قاعدة" : "Add Rule")</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <input type="hidden" id="rEditId" value="0">
+            <div class="modal-body">
+                @if (showTenant)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">@(isAr ? "الجهة" : "Tenant")</label>
+                        <select class="form-select" id="rTenantId">
+                            @foreach (var t in tenants)
+                            {
+                                <option value="@t.Id" selected="@(selectedTenantId == t.Id)">
+                                    @t.TenantName@(t.IsActive ? "" : isAr ? " (غير نشطة)" : " (inactive)")
+                                </option>
+                            }
+                        </select>
+                        <small class="text-muted" id="rTenantHint">
+                            @(isAr ? "القاعدة تُطبَّق على هذه الجهة فقط." : "This rule applies to the selected tenant only.")
+                        </small>
+                    </div>
+                }
+                <div class="row mb-3">
+                    <div class="col-8"><label class="form-label">@(isAr ? "اسم القاعدة" : "Name")</label><input type="text" class="form-control" id="rName"></div>
+                    <div class="col-4"><label class="form-label">@(isAr ? "الأولوية" : "Priority")</label><input type="number" class="form-control" id="rPriority" value="100"></div>
+                </div>
+                <div class="mb-3"><label class="form-label">@(isAr ? "الوصف" : "Description")</label><input type="text" class="form-control" id="rDesc"></div>
+                <div class="row mb-3">
+                    <div class="col-4">
+                        <label class="form-label">@(isAr ? "نوع القاعدة" : "Rule Type")</label>
+                        <select class="form-select" id="rType">
+                            @foreach (var rt in ruleTypes) { <option value="@rt">@rt</option> }
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">@(isAr ? "الاتجاه" : "Direction")</label>
+                        <select class="form-select" id="rDirection">
+                            <option value="Inbound">Inbound (Source→MV)</option>
+                            <option value="Outbound">Outbound (MV→Target)</option>
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">@(isAr ? "فلتر النطاق" : "Scope Filter")</label>
+                        <input type="text" class="form-control" id="rScope" placeholder="STATUSE_CODE==1">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">@(isAr ? "التكوين (JSON)" : "Configuration (JSON)")</label>
+                    <textarea class="form-control font-monospace" id="rConfig" rows="3" placeholder='{"mappings":[]}'>{}</textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@(isAr ? "إلغاء" : "Cancel")</button>
+                <button type="button" class="btn btn-primary" onclick="saveRule()"><i class="bi bi-check-lg me-1"></i>@(isAr ? "حفظ" : "Save")</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    let editingRuleId = 0;
+
+    function setSelectValue(selectId, val) {
+        var sel = document.getElementById(selectId);
+        sel.value = val;
+        if (sel.value !== val) {
+            for (var i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value.toLowerCase() === val.toLowerCase()) {
+                    sel.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        if (sel.selectedIndex === -1 || (sel.value !== val && sel.value.toLowerCase() !== val.toLowerCase())) {
+            console.warn('Dropdown "' + selectId + '": value "' + val + '" not found in options.');
+            sel.selectedIndex = 0;
+        }
+    }
+
+    // A rule's tenant is fixed at creation — the select is editable only when adding.
+    function setRuleTenant(tenantId, locked) {
+        const sel = document.getElementById('rTenantId');
+        if (!sel) return; // single-tenant install: field not rendered
+        if (tenantId) sel.value = String(tenantId);
+        sel.disabled = !!locked;
+        const hint = document.getElementById('rTenantHint');
+        if (hint) hint.textContent = locked
+            ? '@(isAr ? "لا يمكن نقل قاعدة قائمة بين الجهات — أنشئ قاعدة جديدة في الجهة الأخرى." : "An existing rule cannot be moved between tenants — create a new one under the other tenant.")'
+            : '@(isAr ? "القاعدة تُطبَّق على هذه الجهة فقط." : "This rule applies to the selected tenant only.")';
+    }
+
+    function openRuleModal() {
+        editingRuleId = 0;
+        document.getElementById('rEditId').value = '0';
+        document.getElementById('ruleModalTitle').innerHTML = '<i class="bi bi-plus-circle me-2"></i>@(isAr ? "إضافة قاعدة" : "Add Rule")';
+        ['rName','rDesc','rScope'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('rConfig').value = '{}';
+        document.getElementById('rPriority').value = '100';
+        document.getElementById('rType').value = 'Join';
+        document.getElementById('rDirection').value = 'Inbound';
+        // Default to the tenant currently being filtered on, else the first in the list.
+        setRuleTenant(@(selectedTenantId?.ToString() ?? "null"), false);
+    }
+
+    function editRule(id, name, desc, priority, type, direction, scope, config, tenantId) {
+        editingRuleId = id;
+        document.getElementById('rEditId').value = id;
+        document.getElementById('ruleModalTitle').innerHTML = '<i class="bi bi-pencil me-2"></i>@(isAr ? "تعديل القاعدة" : "Edit Rule")';
+        setRuleTenant(tenantId, true);
+        document.getElementById('rName').value = name;
+        document.getElementById('rDesc').value = desc;
+        document.getElementById('rPriority').value = priority;
+        setSelectValue('rType', type);
+        setSelectValue('rDirection', direction);
+        document.getElementById('rScope').value = scope;
+        document.getElementById('rConfig').value = config;
+        new bootstrap.Modal(document.getElementById('ruleModal')).show();
+    }
+
+    async function saveRule() {
+        const id = parseInt(document.getElementById('rEditId').value) || 0;
+        const tenantSel = document.getElementById('rTenantId');
+        const rule = {
+            id: id,
+            // 0 lets the server fall back to the first active tenant (single-tenant installs).
+            tenantId: tenantSel ? (parseInt(tenantSel.value) || 0) : 0,
+            name: document.getElementById('rName').value,
+            description: document.getElementById('rDesc').value,
+            priority: parseInt(document.getElementById('rPriority').value) || 100,
+            ruleType: document.getElementById('rType').value,
+            direction: document.getElementById('rDirection').value,
+            scopeFilter: document.getElementById('rScope').value,
+            configurationJson: document.getElementById('rConfig').value,
+            enabled: true
+        };
+        const url = id > 0 ? '@Url.Action("Update")' : '@Url.Action("Create")';
+        const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(rule) });
+        if (res.ok) location.reload(); else showToast('Failed', 'error');
+    }
+
+    async function deleteRule(id) {
+        if (!confirm(isRtl ? 'حذف القاعدة؟' : 'Delete rule?')) return;
+        await fetch('@Url.Action("Delete")?id=' + id, { method: 'POST' });
+        location.reload();
+    }
+
+    async function toggleRule(id) { await fetch('@Url.Action("Toggle")?id=' + id, { method: 'POST' }); }
+
+    async function previewRules() {
+        const identityId = document.getElementById('previewIdentityId').value;
+        if (!identityId) return;
+        const resultDiv = document.getElementById('previewResult');
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>';
+
+        try {
+            const res = await fetch(`@Url.Action("Preview")?ruleId=0&identityId=${identityId}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                let html = '<div class="small">';
+                data.results.forEach(r => {
+                    const icon = r.matched ? '✅' : '⬜';
+                    html += `<div class="mb-1">${icon} <strong>${r.ruleName}</strong> <span class="badge bg-secondary">${r.ruleType}</span></div>`;
+                });
+                html += '</div>';
+                resultDiv.innerHTML = html;
+            } else {
+                resultDiv.innerHTML = `<div class="alert alert-danger small py-1">${data.error}</div>`;
+            }
+        } catch { resultDiv.innerHTML = '<div class="alert alert-danger small py-1">Preview failed</div>'; }
+    }
+</script>
+}

@@ -1,0 +1,90 @@
+@{
+    Layout = "_SsprLayout";
+    var isAr = (ViewBag.SsprLang as string ?? "ar") == "ar";
+
+    // Failure reason from the Request POST (the user stays on this screen).
+    var err = ViewBag.Error as string;
+    var retryMins = ViewBag.RetryAfterMinutes as int?;
+
+    // Render an IP block as hours + minutes rather than a large minute count.
+    string RetryText()
+    {
+        var m = retryMins ?? 0;
+        if (m <= 0) return isAr ? "لاحقاً" : "later";
+        var h = m / 60; var mm = m % 60;
+        if (h > 0 && mm > 0) return isAr ? $"{h} ساعة و {mm} دقيقة" : $"{h}h {mm}m";
+        if (h > 0) return isAr ? $"{h} ساعة" : $"{h}h";
+        return isAr ? $"{mm} دقيقة" : $"{mm}m";
+    }
+
+    var errMsg = err switch
+    {
+        "InvalidIdentity" => isAr
+            ? "اسم المستخدم أو رقم الهوية الوطنية غير صحيح. تأكد من البيانات وحاول مرة أخرى."
+            : "The username or national ID is incorrect. Check your details and try again.",
+        "IpBlocked" => isAr
+            ? $"تم حظر جهازك مؤقتاً بسبب تكرار المحاولات الخاطئة. يمكنك المحاولة بعد {RetryText()}."
+            : $"This device is temporarily blocked after too many failed attempts. Try again in {RetryText()}.",
+        "UserResetLimit" => isAr
+            ? "لقد استنفدت عدد مرات إعادة تعيين كلمة المرور المسموحة خلال 24 ساعة. راجع الدعم الفني إذا كنت بحاجة لإعادة التعيين."
+            : "You have used all password resets allowed within 24 hours. Contact support if you still need a reset.",
+        "RateLimited" => isAr
+            ? "تجاوزت عدد الطلبات المسموحة خلال الساعة. يرجى المحاولة لاحقاً."
+            : "You have exceeded the number of requests allowed this hour. Please try again later.",
+        "NoPhone" => isAr
+            ? "لا يوجد رقم جوال مسجّل على حسابك، لذلك تعذّر إرسال رمز التحقق. راجع الدعم الفني."
+            : "There is no mobile number registered on your account, so no code could be sent. Contact support.",
+        "Excluded" => isAr
+            ? "هذا الحساب غير مؤهّل للخدمة الذاتية. راجع الدعم الفني."
+            : "This account is not eligible for self-service reset. Contact support.",
+        "SmsFailed" => isAr
+            ? "تعذّر إرسال رسالة رمز التحقق حالياً. حاول مرة أخرى بعد قليل."
+            : "The verification code could not be sent right now. Please try again shortly.",
+        "DirectoryError" => isAr
+            ? "تعذّر التحقق من البيانات حالياً بسبب عطل مؤقت في الخدمة. حاول لاحقاً أو راجع الدعم الفني."
+            : "Verification is temporarily unavailable due to a service problem. Please try again later or contact support.",
+        _ => null
+    };
+    var blocked = err == "IpBlocked";
+}
+<div class="text-center mb-4">
+    <div class="brand-icon" id="brandIcon"><i class="bi bi-key-fill"></i></div>
+    <h5 class="fw-bold mb-1">@(isAr ? "إعادة تعيين كلمة المرور" : "Reset Your Password")</h5>
+    <p class="text-muted small mb-0">
+        @(isAr ? "أدخل اسم المستخدم ورقم الهوية الوطنية" : "Enter your username and national ID")
+    </p>
+</div>
+
+@if (errMsg != null)
+{
+    <div class="alert @(blocked ? "alert-danger" : "alert-warning") d-flex align-items-start gap-2 py-2 px-3 mb-3"
+         role="alert" aria-live="assertive" style="font-size:0.8rem">
+        <i class="bi @(blocked ? "bi-shield-lock-fill" : "bi-exclamation-triangle-fill") mt-1"></i>
+        <div>@errMsg</div>
+    </div>
+}
+
+<form method="post" action="@Url.Action("Request", "Sspr")">
+    @Html.AntiForgeryToken()
+    <div class="mb-3">
+        <label class="form-label small text-muted">@(isAr ? "اسم المستخدم" : "Username")</label>
+        <input type="text" name="username" class="form-control" value="@(ViewBag.Username as string)"
+               autofocus autocomplete="username" required @(blocked ? "disabled" : "") />
+    </div>
+    <div class="mb-4">
+        <label class="form-label small text-muted">@(isAr ? "رقم الهوية الوطنية" : "National ID")</label>
+        <input type="text" name="nationalId" class="form-control" inputmode="numeric" pattern="[0-9]+"
+               maxlength="15" oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+               data-errmsg="@(isAr ? "أدخل رقم هوية صحيح (أرقام فقط)" : "Enter a valid national ID (digits only)")"
+               required @(blocked ? "disabled" : "") />
+    </div>
+    <button type="submit" class="btn btn-sspr w-100" @(blocked ? "disabled" : "")>
+        <i class="bi bi-chat-dots me-1"></i> @(isAr ? "إرسال رمز التحقق" : "Send Verification Code")
+    </button>
+</form>
+
+<p class="text-center text-muted mt-4 mb-0" style="font-size:0.72rem">
+    @(isAr
+        ? "سيصلك رمز تحقق على جوالك المسجل في النظام إذا تطابقت البيانات"
+        : "A verification code will be sent to the mobile registered in the system if your details match")
+</p>

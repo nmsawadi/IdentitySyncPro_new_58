@@ -1,0 +1,138 @@
+@using IdentitySyncPro.Core.Models.Governance
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "حسابات بلا مالك" : "Unclaimed Accounts";
+
+    var accounts = ViewBag.Accounts as List<GovNhiAccount> ?? new();
+    var now = (DateTime)(ViewBag.Now ?? DateTime.UtcNow);
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h5 class="fw-700 mb-1">
+            <i class="bi bi-question-circle me-2 text-accent"></i>@(isAr ? "حسابات بلا مالك" : "Unclaimed Accounts")
+        </h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr
+                ? "حسابات خدمة لا يعرف أحد اليوم من المسؤول عنها — إن كان أحدها لك، طالِب به"
+                : "Service accounts nobody is currently answerable for — if one is yours, claim it")
+        </p>
+    </div>
+    <a href="@Url.Action("Index")" class="btn btn-glass">
+        <i class="bi bi-person-check me-1"></i>@(isAr ? "حساباتي" : "My accounts")
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (accounts.Count == 0)
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-check2-circle fs-1 text-success d-block mb-3"></i>
+        <p class="text-muted mb-0">
+            @(isAr
+                ? "لا حساب بلا مالك. تأكّد أن جرد الحسابات غير البشرية يعمل ودورة الحياة مُفعّلة عليه قبل قراءة هذا كخبر سار."
+                : "No unclaimed accounts. Check that a non-human inventory service is running with the lifecycle switched on before reading this as good news.")
+        </p>
+    </div>
+}
+else
+{
+    <div class="glass-card p-0 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>@(isAr ? "الحساب" : "Account")</th>
+                        <th>@(isAr ? "الحالة" : "State")</th>
+                        <th>@(isAr ? "مقترح الدليل" : "Directory suggests")</th>
+                        <th>@(isAr ? "المهلة" : "Deadline")</th>
+                        <th class="text-end">@(isAr ? "الإجراء" : "Action")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var a in accounts)
+                {
+                    var daysLeft = a.ClaimDueUtc is { } due ? (int)Math.Ceiling((due - now).TotalDays) : (int?)null;
+
+                    <tr>
+                        <td>
+                            <div class="fw-600">@a.Account</div>
+                            @if (!string.IsNullOrWhiteSpace(a.Description))
+                            {
+                                <div class="fs-sm text-muted">@a.Description</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(a.Signals))
+                            {
+                                <div class="fs-sm text-muted">
+                                    <i class="bi bi-tag me-1"></i>@a.Signals
+                                </div>
+                            }
+                        </td>
+                        <td><partial name="_NhiState" model="a" /></td>
+                        <td class="fs-sm">
+                            @if (!string.IsNullOrWhiteSpace(a.DirectoryOwner))
+                            {
+                                @* managedBy is a hint, never an owner: nobody accepted anything by
+                                   having their name typed into an attribute. *@
+                                <span>@a.DirectoryOwner</span>
+                                <div class="text-muted">@(isAr ? "من سمة managedBy — لم يقبل بعد" : "from managedBy — not accepted yet")</div>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(a.DisownedBy))
+                            {
+                                <div class="text-warning">
+                                    <i class="bi bi-person-x me-1"></i>@(isAr ? "أعاده" : "declined by") @a.DisownedBy
+                                </div>
+                            }
+                        </td>
+                        <td class="fs-sm">
+                            @if (a.State == GovNhiStates.Quarantined)
+                            {
+                                <span class="text-danger fw-600">
+                                    @(isAr ? "مضت المهلة" : "deadline passed")
+                                </span>
+                                <div class="text-muted">@(isAr ? "المطالبة به ترفع الحجر" : "claiming it lifts the quarantine")</div>
+                            }
+                            else if (daysLeft is { } d)
+                            {
+                                <span class="@(d <= 7 ? "text-danger fw-600" : "")">
+                                    @(isAr ? $"{d} يوماً" : $"{d} day(s)")
+                                </span>
+                                <div class="text-muted">@a.ClaimDueUtc?.ToString("yyyy-MM-dd")</div>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <form method="post" action="@Url.Action("Claim")" class="d-inline"
+                                  onsubmit="return confirm('@(isAr ? "ستصبح المسؤول عن هذا الحساب، وسيُطلب منك تأكيد الحاجة إليه دورياً. متابعة؟" : "You will become answerable for this account and will be asked to confirm it periodically. Continue?")');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@a.Id" />
+                                <input type="hidden" name="returnTo" value="Unclaimed" />
+                                <button type="submit" class="btn btn-sm btn-accent">
+                                    <i class="bi bi-hand-index me-1"></i>@(isAr ? "هذا لي" : "This is mine")
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

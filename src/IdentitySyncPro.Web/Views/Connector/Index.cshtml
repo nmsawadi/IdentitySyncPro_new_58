@@ -1,0 +1,173 @@
+@model IEnumerable<IdentitySyncPro.Core.Models.Connectors.ConnectorConfig>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "الموصّلات" : "Connectors";
+}
+
+<!-- Header -->
+<div class="glass-card mb-4">
+    <h6 class="fw-600 mb-1"><i class="bi bi-plug-fill me-2 text-accent"></i>@(isAr ? "موصّلات البيانات" : "Data Connectors")</h6>
+    <p class="fs-sm text-muted mb-0">@(isAr ? "اختبار ومراقبة الاتصال بأنظمة Oracle و Active Directory" : "Test and monitor connections to Oracle and Active Directory systems")</p>
+</div>
+
+<!-- Connector Cards -->
+<div class="row g-4 mb-4">
+    @foreach (var connector in Model)
+    {
+        var isSource = connector.Type == IdentitySyncPro.Core.Enums.ConnectorType.Source;
+        var icon = isSource ? "bi-database-fill" : "bi-diagram-3-fill";
+        var color = isSource ? "#f59e0b" : "#6366f1";
+
+        <div class="col-lg-6">
+            <div class="glass-card connector-card" id="card-@connector.Id">
+                <div class="d-flex align-items-start justify-content-between mb-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="stat-icon" style="background:@(color)20; color:@color">
+                            <i class="bi @icon"></i>
+                        </div>
+                        <div>
+                            <h6 class="fw-600 mb-0">@connector.Name</h6>
+                            <span class="fs-xs text-muted">@connector.ConnectorClass · @(isSource ? (isAr ? "مصدر" : "Source") : (isAr ? "هدف" : "Target"))</span>
+                        </div>
+                    </div>
+                    <span class="badge-status @(connector.Enabled ? "badge-success" : "badge-muted")" id="status-@connector.Id">
+                        @(connector.Enabled ? (isAr ? "مفعّل" : "Enabled") : (isAr ? "معطّل" : "Disabled"))
+                    </span>
+                </div>
+
+                <div class="d-flex flex-column gap-2 mb-4">
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted fs-sm">@(isAr ? "النوع" : "Type")</span>
+                        <span class="fs-sm fw-600">@connector.ConnectorClass</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted fs-sm">@(isAr ? "آخر اختبار" : "Last Test")</span>
+                        <span class="fs-sm">@(connector.LastConnectionTest?.ToString("yyyy-MM-dd HH:mm") ?? (isAr ? "لم يتم بعد" : "Never"))</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(connector.LastError))
+                    {
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted fs-sm">@(isAr ? "آخر خطأ" : "Last Error")</span>
+                            <span class="fs-xs" style="color:var(--danger); max-width:200px; text-align:end">@connector.LastError</span>
+                        </div>
+                    }
+                </div>
+
+                <div id="result-@connector.Id" class="mb-3" style="display:none">
+                    <div class="p-3 rounded" style="background:rgba(255,255,255,0.02); font-family:monospace; font-size:12px;">
+                        <div id="resultMsg-@connector.Id"></div>
+                        <div id="resultInfo-@connector.Id" class="text-muted mt-1"></div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    @if (isSource)
+                    {
+                        <button class="btn btn-glow btn-sm flex-grow-1" onclick="testOracle()" id="btnTest-@connector.Id">
+                            <i class="bi bi-broadcast me-1"></i> @(isAr ? "اختبار الاتصال" : "Test Connection")
+                        </button>
+                        <button class="btn btn-glass btn-sm" onclick="getOracleCount()" id="btnCount">
+                            <i class="bi bi-hash me-1"></i> @(isAr ? "عدد" : "Count")
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-glow btn-sm flex-grow-1" onclick="testAD()" id="btnTest-@connector.Id">
+                            <i class="bi bi-broadcast me-1"></i> @(isAr ? "اختبار الاتصال" : "Test Connection")
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Configuration Reference -->
+<div class="glass-card">
+    <h6 class="fw-600 mb-3"><i class="bi bi-gear me-2 text-accent"></i>@(isAr ? "مرجع الإعدادات" : "Configuration Reference")</h6>
+    <p class="fs-sm text-muted mb-3">@(isAr ? "يمكن إدارة إعدادات الاتصال من" : "Connection settings can be managed from") <a href="@Url.Action("Index", "Settings")" style="color:var(--accent-primary)">@(isAr ? "صفحة الإعدادات" : "Settings page")</a></p>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="p-3 rounded" style="background:rgba(255,255,255,0.02)">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-database-fill" style="color:#f59e0b"></i>
+                    <span class="fw-600 fs-sm">@(isAr ? "إعدادات Oracle" : "Oracle Settings")</span>
+                </div>
+                <div class="fs-xs text-muted" style="font-family:monospace">
+                    <div>DataSource: @(isAr ? "مُعد في الإعدادات" : "configured in settings")</div>
+                    <div>UserId: identity_view</div>
+                    <div>ViewName: V_IDENTITY_DATA</div>
+                    <div>CommandTimeout: 300s</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="p-3 rounded" style="background:rgba(255,255,255,0.02)">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-diagram-3-fill" style="color:#6366f1"></i>
+                    <span class="fw-600 fs-sm">@(isAr ? "إعدادات Active Directory" : "Active Directory Settings")</span>
+                </div>
+                <div class="fs-xs text-muted" style="font-family:monospace">
+                    <div>Port: 389 (LDAP)</div>
+                    <div>SSL: @(isAr ? "معطل" : "Disabled")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    async function testOracle() { await testConnector('Oracle', '/Connector/TestOracle', 1); }
+    async function testAD() { await testConnector('AD', '/Connector/TestAD', 2); }
+
+    async function testConnector(name, url, id) {
+        const btn = document.getElementById(`btnTest-${id}`);
+        const card = document.getElementById(`card-${id}`);
+        const resultDiv = document.getElementById(`result-${id}`);
+        const resultMsg = document.getElementById(`resultMsg-${id}`);
+        const resultInfo = document.getElementById(`resultInfo-${id}`);
+
+        btn.disabled = true;
+        btn.innerHTML = `<i class="bi bi-hourglass-split me-1"></i> ${isRtl ? 'جاري الاختبار...' : 'Testing...'}`;
+        card.className = 'glass-card connector-card testing';
+
+        try {
+            const res = await fetch(url, { method: 'POST' });
+            const data = await res.json();
+            resultDiv.style.display = '';
+            if (data.success) {
+                card.className = 'glass-card connector-card connected';
+                resultMsg.innerHTML = `<span style="color:var(--success)"><i class="bi bi-check-circle-fill me-1"></i>${data.message}</span>`;
+                resultInfo.textContent = data.info || '';
+                showToast(`${name} ${isRtl ? 'الاتصال ناجح' : 'connection OK'} (${data.durationMs}ms)`, 'success');
+            } else {
+                card.className = 'glass-card connector-card disconnected';
+                resultMsg.innerHTML = `<span style="color:var(--danger)"><i class="bi bi-x-circle-fill me-1"></i>${data.message}</span>`;
+                showToast(`${name} ${isRtl ? 'فشل الاتصال' : 'connection FAILED'}`, 'error');
+            }
+        } catch (e) {
+            card.className = 'glass-card connector-card disconnected';
+            resultDiv.style.display = '';
+            resultMsg.innerHTML = `<span style="color:var(--danger)"><i class="bi bi-x-circle-fill me-1"></i>${isRtl ? 'فشل الطلب' : 'Request failed'}: ${e.message}</span>`;
+        }
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-broadcast me-1"></i> ${isRtl ? 'اختبار الاتصال' : 'Test Connection'}`;
+    }
+
+    async function getOracleCount() {
+        const btn = document.getElementById('btnCount');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> ...';
+        try {
+            const res = await fetch('/Connector/GetOracleCount', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) showToast(`Oracle: ${data.count.toLocaleString()} ${isRtl ? 'سجل' : 'records'}`, 'success');
+            else showToast(`${isRtl ? 'فشل العدّ' : 'Count failed'}: ${data.error}`, 'error');
+        } catch (e) { showToast(isRtl ? 'فشل الطلب' : 'Count request failed', 'error'); }
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-hash me-1"></i> ${isRtl ? 'عدد' : 'Count'}`;
+    }
+</script>
+}

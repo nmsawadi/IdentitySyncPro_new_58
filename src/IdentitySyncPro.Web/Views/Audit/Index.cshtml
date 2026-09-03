@@ -1,0 +1,135 @@
+@model IEnumerable<IdentitySyncPro.Core.Models.Audit.AuditEntry>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "سجل التدقيق" : "Audit Trail";
+}
+
+<!-- Filters -->
+<div class="glass-card mb-4">
+    <form method="get" class="d-flex gap-3 align-items-end flex-wrap">
+        <div style="min-width:160px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "الفئة" : "Category")</label>
+            <select name="category" class="form-select form-glass" id="categoryFilter">
+                <option value="">@(isAr ? "جميع الفئات" : "All Categories")</option>
+                <option value="Sync" selected="@(ViewBag.Category == "Sync")">@(isAr ? "مزامنة" : "Sync")</option>
+                <option value="HealthCheck" selected="@(ViewBag.Category == "HealthCheck")">@(isAr ? "فحص صحة" : "Health Check")</option>
+                <option value="Connector" selected="@(ViewBag.Category == "Connector")">@(isAr ? "موصّل" : "Connector")</option>
+                <option value="System" selected="@(ViewBag.Category == "System")">@(isAr ? "نظام" : "System")</option>
+            </select>
+        </div>
+        <div style="min-width:160px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "الخطورة" : "Severity")</label>
+            <select name="severity" class="form-select form-glass" id="severityFilter">
+                <option value="">@(isAr ? "جميع المستويات" : "All Levels")</option>
+                <option value="Info" selected="@(ViewBag.Severity == "Info")">@(isAr ? "معلومات" : "Info")</option>
+                <option value="Warning" selected="@(ViewBag.Severity == "Warning")">@(isAr ? "تحذير" : "Warning")</option>
+                <option value="Error" selected="@(ViewBag.Severity == "Error")">@(isAr ? "خطأ" : "Error")</option>
+                <option value="Critical" selected="@(ViewBag.Severity == "Critical")">@(isAr ? "حرج" : "Critical")</option>
+            </select>
+        </div>
+        <div style="min-width:180px">
+            @* Free text plus a datalist of actors already seen: a name that has left the system
+               still needs to be searchable, so this is not a closed dropdown. *@
+            <label class="form-label fs-xs text-muted">@(isAr ? "المنفِّذ" : "Performed By")</label>
+            <input type="text" name="performedBy" class="form-control form-glass" list="actorList"
+                   value="@ViewBag.PerformedBy" placeholder="@(isAr ? "اسم المستخدم" : "username")" />
+            <datalist id="actorList">
+                @foreach (var actor in (ViewBag.Actors as IEnumerable<string>) ?? Enumerable.Empty<string>())
+                {
+                    <option value="@actor"></option>
+                }
+            </datalist>
+        </div>
+        <div style="min-width:140px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "من تاريخ" : "Date From")</label>
+            <input type="date" name="dateFrom" class="form-control form-glass" value="@ViewBag.DateFrom" />
+        </div>
+        <div style="min-width:140px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "إلى تاريخ" : "Date To")</label>
+            <input type="date" name="dateTo" class="form-control form-glass" value="@ViewBag.DateTo" />
+        </div>
+        <button type="submit" class="btn btn-glow" id="filterBtn">
+            <i class="bi bi-funnel me-1"></i> @(isAr ? "تصفية" : "Filter")
+        </button>
+        <a href="@Url.Action("Index", "Audit")" class="btn btn-glass">
+            <i class="bi bi-x-lg me-1"></i> @(isAr ? "مسح" : "Clear")
+        </a>
+    </form>
+</div>
+
+<!-- Results Count -->
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <span class="fs-sm text-muted">
+        <i class="bi bi-journal-text me-1"></i>
+        <span class="fw-600 text-accent">@ViewBag.TotalCount</span> @(isAr ? "سجل تدقيق" : "audit entries")
+    </span>
+    <span class="fs-sm text-muted">@(isAr ? "صفحة" : "Page") @ViewBag.CurrentPage @(isAr ? "من" : "of") @ViewBag.TotalPages</span>
+</div>
+
+<!-- Audit Table -->
+<div class="glass-card p-0" style="overflow:hidden">
+    @if (Model.Any())
+    {
+        <table class="table-glass">
+            <thead>
+                <tr>
+                    <th>@(isAr ? "الوقت" : "Timestamp")</th>
+                    <th>@(isAr ? "الخطورة" : "Severity")</th>
+                    <th>@(isAr ? "الفئة" : "Category")</th>
+                    <th>@(isAr ? "الإجراء" : "Action")</th>
+                    <th>@(isAr ? "الكيان" : "Entity")</th>
+                    <th>@(isAr ? "بواسطة" : "Performed By")</th>
+                    <th>@(isAr ? "العنوان" : "IP")</th>
+                    <th>@(isAr ? "التفاصيل" : "Details")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in Model)
+                {
+                    var severityClass = entry.Severity.ToString() switch { "Info" => "badge-info", "Warning" => "badge-warning", "Error" => "badge-danger", "Critical" => "badge-danger", _ => "badge-muted" };
+                    var severityIcon = entry.Severity.ToString() switch { "Info" => "bi-info-circle-fill", "Warning" => "bi-exclamation-triangle-fill", "Error" => "bi-x-circle-fill", "Critical" => "bi-fire", _ => "bi-circle" };
+                    <tr>
+                        <td class="text-muted fs-sm" style="white-space:nowrap">@entry.Timestamp.ToString("MMM dd, HH:mm:ss")</td>
+                        <td><span class="badge-status @severityClass"><i class="bi @severityIcon me-1"></i>@entry.Severity</span></td>
+                        <td><span class="badge-status badge-purple">@entry.Category</span></td>
+                        <td class="fs-sm" style="max-width:300px">@entry.Action</td>
+                        <td class="text-muted fs-sm">
+                            @if (!string.IsNullOrEmpty(entry.EntityType))
+                            { <span>@entry.EntityType</span> if (!string.IsNullOrEmpty(entry.EntityId)) { <span class="text-accent fw-600">/@entry.EntityId</span> } }
+                            else { <span>—</span> }
+                        </td>
+                        <td class="fs-sm fw-600">@entry.PerformedBy</td>
+                        <td class="text-muted fs-xs" dir="ltr">@(string.IsNullOrWhiteSpace(entry.IpAddress) ? "—" : entry.IpAddress)</td>
+                        <td class="text-muted fs-xs" style="max-width:200px; overflow:hidden; text-overflow:ellipsis" title="@entry.Details">@(entry.Details ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="empty-state">
+            <i class="bi bi-journal-x"></i>
+            <h6>@(isAr ? "لا توجد سجلات تدقيق" : "No audit entries found")</h6>
+            <p class="text-muted">@(isAr ? "حاول تعديل الفلاتر أو انتظر حتى يتم تسجيل نشاط." : "Try adjusting your filters or wait for system activity to generate audit entries.")</p>
+        </div>
+    }
+</div>
+
+<!-- Pagination -->
+@{
+    // Every active filter has to ride along, or page 2 quietly shows unfiltered results.
+    // performedBy is escaped: an AD name can be CORP\user or user@corp.local.
+    var pgBaseAudit = Url.Action("Index", "Audit") + "?" +
+        (!string.IsNullOrEmpty(ViewBag.Category as string) ? $"category={ViewBag.Category}&" : "") +
+        (!string.IsNullOrEmpty(ViewBag.Severity as string) ? $"severity={ViewBag.Severity}&" : "") +
+        (!string.IsNullOrEmpty(ViewBag.PerformedBy as string) ? $"performedBy={Uri.EscapeDataString((string)ViewBag.PerformedBy)}&" : "") +
+        (!string.IsNullOrEmpty(ViewBag.DateFrom as string) ? $"dateFrom={ViewBag.DateFrom}&" : "") +
+        (!string.IsNullOrEmpty(ViewBag.DateTo as string) ? $"dateTo={ViewBag.DateTo}&" : "") +
+        "page=";
+}
+@await Html.PartialAsync("_SmartPagination", new ViewDataDictionary(ViewData) {
+    { "PgCurrent", (int)ViewBag.CurrentPage },
+    { "PgTotal", (int)ViewBag.TotalPages },
+    { "PgBaseUrl", pgBaseAudit }
+})

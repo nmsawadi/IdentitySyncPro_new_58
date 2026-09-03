@@ -1,0 +1,190 @@
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "التقارير والتحليلات" : "Reports & Analytics";
+    // Multi-tenant: null selection = figures across every tenant.
+    var tenants = ViewBag.Tenants as List<(int Id, string TenantName, bool IsActive)> ?? new List<(int, string, bool)>();
+    var selectedTenantId = ViewBag.TenantId as int?;
+    var showTenant = tenants.Count > 1;
+    var selectedTenantName = selectedTenantId.HasValue
+        ? tenants.FirstOrDefault(t => t.Id == selectedTenantId.Value).TenantName
+        : null;
+}
+
+<!-- Tenant Selector + Export Button -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        @if (showTenant)
+        {
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="fs-sm text-muted">
+                    <i class="bi bi-building me-1"></i>@(isAr ? "الجهة" : "Tenant")
+                </span>
+                <select class="form-select form-select-sm form-glass" style="width:auto"
+                        onchange="location.href='@Url.Action("Index", "Reports")?tenantId=' + this.value">
+                    <option value="">@(isAr ? "كل الجهات" : "All Tenants")</option>
+                    @foreach (var t in tenants)
+                    {
+                        <option value="@t.Id" selected="@(selectedTenantId == t.Id)">
+                            @t.TenantName@(t.IsActive ? "" : isAr ? " (غير نشطة)" : " (inactive)")
+                        </option>
+                    }
+                </select>
+                <span class="badge @(selectedTenantId.HasValue ? "bg-primary" : "bg-secondary")">
+                    @(selectedTenantId.HasValue
+                        ? (isAr ? $"الأرقام تخصّ: {selectedTenantName}" : $"Figures for: {selectedTenantName}")
+                        : (isAr ? "الأرقام مجموع كل الجهات" : "Figures across all tenants"))
+                </span>
+            </div>
+        }
+    </div>
+    @* The export must carry the same scope as the screen, or the file contradicts it. *@
+    <a href="@Url.Action("ExportExcel", "Reports", new { tenantId = selectedTenantId })" class="btn btn-glass d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-excel"></i>
+        @(isAr ? "تصدير Excel" : "Export Excel")
+    </a>
+</div>
+
+<!-- Summary Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-total">
+            <div class="stat-label">@(isAr ? "إجمالي عمليات المزامنة" : "Total Sync Runs")</div>
+            <div class="stat-value" id="statRuns">@ViewBag.TotalSyncRuns</div>
+            <div class="fs-xs text-muted">@(isAr ? "كل الأوقات" : "All time")</div>
+            <i class="bi bi-arrow-repeat stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-active">
+            <div class="stat-label">@(isAr ? "عمليات ناجحة" : "Successful Runs")</div>
+            <div class="stat-value" id="statSuccess">@ViewBag.SuccessfulRuns</div>
+            <div class="fs-xs text-muted">@(isAr ? "بدون أخطاء" : "Completed without errors")</div>
+            <i class="bi bi-check-circle-fill stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-failed">
+            <div class="stat-label">@(isAr ? "عمليات فاشلة" : "Failed Runs")</div>
+            <div class="stat-value" id="statFailedRuns">@ViewBag.FailedRuns</div>
+            <div class="fs-xs text-muted">@(isAr ? "انتهت بفشل" : "Completed with failure")</div>
+            <i class="bi bi-x-circle-fill stat-bg-icon"></i>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="glass-card stat-card stat-pending">
+            <div class="stat-label">@(isAr ? "إجمالي العمليات" : "Total Operations")</div>
+            <div class="stat-value" id="statOps">@ViewBag.TotalOperations</div>
+            <div class="fs-xs text-muted">@(isAr ? "إجراءات فردية" : "Individual actions")</div>
+            <i class="bi bi-lightning-charge-fill stat-bg-icon"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="glass-card">
+            <h6 class="fw-600 mb-3"><i class="bi bi-graph-up me-2 text-accent"></i>@(isAr ? "نشاط المزامنة - 30 يوم" : "30-Day Sync Activity")</h6>
+            <div class="chart-container"><canvas id="trendChart"></canvas></div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="glass-card h-100">
+            <h6 class="fw-600 mb-3"><i class="bi bi-pie-chart me-2 text-accent"></i>@(isAr ? "توزيع حالة الهويات" : "Identity Status Distribution")</h6>
+            <div class="chart-container" style="height:240px"><canvas id="statusChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Errors -->
+<div class="glass-card">
+    <h6 class="fw-600 mb-3"><i class="bi bi-bug me-2 text-accent"></i>@(isAr ? "أكثر الأخطاء شيوعاً (آخر 30 يوم)" : "Top Errors (Last 30 days)")</h6>
+    @if (ViewBag.TopErrors != null)
+    {
+        var errors = (List<IdentitySyncPro.Web.Controllers.TopErrorEntry>)ViewBag.TopErrors;
+        if (errors.Count > 0)
+        {
+            <table class="table-glass">
+                <thead>
+                    <tr>
+                        <th style="width:60px">#</th>
+                        <th>@(isAr ? "رسالة الخطأ" : "Error Message")</th>
+                        <th style="width:120px">@(isAr ? "التكرارات" : "Occurrences")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ int rank = 1; }
+                    @foreach (var err in errors)
+                    {
+                        <tr>
+                            <td class="text-muted fw-600">@rank</td>
+                            <td class="fs-sm" style="font-family:monospace; color:var(--danger)">@err.Error</td>
+                            <td><span class="badge-status badge-danger">@err.Count</span></td>
+                        </tr>
+                        rank++;
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="text-center py-4">
+                <i class="bi bi-check-circle-fill fs-3 d-block mb-2" style="color:var(--success); opacity:0.5"></i>
+                <p class="text-muted mb-0">@(isAr ? "لا توجد أخطاء مسجلة — ممتاز!" : "No errors recorded — great!")</p>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+<script>
+    const fontFamily = isRtl ? 'Cairo' : 'Inter';
+
+    const trendCtx = document.getElementById('trendChart');
+    if (trendCtx) {
+        const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.MonthLabels ?? new List<string>()));
+        const created = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.MonthCreated ?? new List<int>()));
+        const updated = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.MonthUpdated ?? new List<int>()));
+        const failed = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.MonthFailed ?? new List<int>()));
+
+        new Chart(trendCtx, {
+            type: 'bar',
+            data: {
+                labels: labels.length ? labels : [isRtl ? 'لا توجد بيانات' : 'No Data'],
+                datasets: [
+                    { label: isRtl ? 'إنشاء' : 'Created', data: created, backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10b981', borderWidth: 1, borderRadius: 4 },
+                    { label: isRtl ? 'تحديث' : 'Updated', data: updated, backgroundColor: 'rgba(245,158,11,0.6)', borderColor: '#f59e0b', borderWidth: 1, borderRadius: 4 },
+                    { label: isRtl ? 'فشل' : 'Failed', data: failed, backgroundColor: 'rgba(239,68,68,0.6)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'top', labels: { color: '#94a3b8', font: { family: fontFamily, size: 12 }, usePointStyle: true, padding: 20 } } },
+                scales: {
+                    x: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { family: fontFamily, size: 10 }, maxRotation: 45 } },
+                    y: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { family: fontFamily, size: 11 } }, beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    const statusCtx = document.getElementById('statusChart');
+    if (statusCtx) {
+        const statusLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.StatusLabels ?? new List<string>()));
+        const statusCounts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.StatusCounts ?? new List<int>()));
+        const statusColors = statusLabels.map(l => { switch(l) { case 'Synced': return '#10b981'; case 'Failed': return '#ef4444'; case 'Pending': return '#f59e0b'; default: return '#6366f1'; } });
+
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: statusLabels.length ? statusLabels : [isRtl ? 'لا توجد بيانات' : 'No Data'],
+                datasets: [{ data: statusCounts.length ? statusCounts : [1], backgroundColor: statusColors.length ? statusColors.map(c=>c+'99') : ['#64748b33'], borderColor: statusColors.length ? statusColors : ['#64748b'], borderWidth: 2, hoverOffset: 8 }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '65%',
+                plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { family: fontFamily, size: 12 }, padding: 16, usePointStyle: true } } }
+            }
+        });
+    }
+</script>
+}

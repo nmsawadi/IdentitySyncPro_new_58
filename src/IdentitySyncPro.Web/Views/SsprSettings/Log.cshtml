@@ -1,0 +1,109 @@
+@model IEnumerable<IdentitySyncPro.Core.Models.Settings.PasswordResetRequest>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "سجل إعادة تعيين كلمة المرور" : "Password Reset Log";
+    var domainNames = ViewBag.DomainNames as Dictionary<int, string> ?? new();
+
+    string Mask(string? p) => string.IsNullOrEmpty(p) ? "" : IdentitySyncPro.Core.Helpers.PhoneHelper.MaskPhone(p);
+    (string cls, string ar, string en) Badge(string s) => s switch
+    {
+        "Completed" => ("badge-success", "تمت", "Completed"),
+        "Blocked" => ("badge-danger", "محظور", "Blocked"),
+        "Expired" => ("badge-muted", "منتهٍ", "Expired"),
+        _ => ("badge-warning", "قيد الانتظار", "Pending")
+    };
+}
+
+<div class="glass-card mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <h6 class="fw-600 mb-1"><i class="bi bi-journal-lock me-2 text-accent"></i>@(isAr ? "سجل إعادة تعيين كلمة المرور" : "Password Reset Log")</h6>
+            <p class="fs-sm text-muted mb-0">@(isAr ? "كل عمليات الخدمة الذاتية — التحقق، النجاح، الحظر، الانتهاء" : "Every self-service operation — verification, success, block, expiry")</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="@Url.Action("ExportLog", "SsprSettings", new { username = ViewBag.Username, status = ViewBag.Status, dateFrom = ViewBag.DateFrom, dateTo = ViewBag.DateTo })" class="btn btn-glass btn-sm"><i class="bi bi-file-earmark-excel me-1"></i> @(isAr ? "تصدير Excel" : "Export Excel")</a>
+            <a href="@Url.Action("Index", "SsprSettings")" class="btn btn-glass btn-sm"><i class="bi bi-gear me-1"></i> @(isAr ? "الإعدادات" : "Settings")</a>
+        </div>
+    </div>
+
+    <hr style="border-color:rgba(255,255,255,0.06);margin:12px 0">
+
+    <!-- Summary cards -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3"><div class="p-2 rounded" style="background:rgba(16,185,129,0.1)"><div class="fs-xs text-muted">@(isAr ? "تمت" : "Completed")</div><div class="fw-600" style="color:var(--success)">@ViewBag.CountCompleted</div></div></div>
+        <div class="col-6 col-md-3"><div class="p-2 rounded" style="background:rgba(239,68,68,0.1)"><div class="fs-xs text-muted">@(isAr ? "محظور" : "Blocked")</div><div class="fw-600" style="color:var(--danger)">@ViewBag.CountBlocked</div></div></div>
+        <div class="col-6 col-md-3"><div class="p-2 rounded" style="background:rgba(148,163,184,0.1)"><div class="fs-xs text-muted">@(isAr ? "منتهٍ" : "Expired")</div><div class="fw-600 text-muted">@ViewBag.CountExpired</div></div></div>
+        <div class="col-6 col-md-3"><div class="p-2 rounded" style="background:rgba(245,158,11,0.1)"><div class="fs-xs text-muted">@(isAr ? "قيد الانتظار" : "Pending")</div><div class="fw-600" style="color:var(--warning)">@ViewBag.CountPending</div></div></div>
+    </div>
+
+    <!-- Filters -->
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3"><label class="form-label fs-xs text-muted">@(isAr ? "اسم المستخدم" : "Username")</label><input type="text" name="username" value="@ViewBag.Username" class="form-control form-control-sm" /></div>
+        <div class="col-md-2">
+            <label class="form-label fs-xs text-muted">@(isAr ? "الحالة" : "Status")</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">@(isAr ? "الكل" : "All")</option>
+                <option value="Completed" selected="@(ViewBag.Status == "Completed")">@(isAr ? "تمت" : "Completed")</option>
+                <option value="Blocked" selected="@(ViewBag.Status == "Blocked")">@(isAr ? "محظور" : "Blocked")</option>
+                <option value="Expired" selected="@(ViewBag.Status == "Expired")">@(isAr ? "منتهٍ" : "Expired")</option>
+                <option value="Pending" selected="@(ViewBag.Status == "Pending")">@(isAr ? "قيد الانتظار" : "Pending")</option>
+            </select>
+        </div>
+        <div class="col-md-2"><label class="form-label fs-xs text-muted">@(isAr ? "من" : "From")</label><input type="date" name="dateFrom" value="@ViewBag.DateFrom" class="form-control form-control-sm" /></div>
+        <div class="col-md-2"><label class="form-label fs-xs text-muted">@(isAr ? "إلى" : "To")</label><input type="date" name="dateTo" value="@ViewBag.DateTo" class="form-control form-control-sm" /></div>
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-glow btn-sm"><i class="bi bi-funnel me-1"></i> @(isAr ? "تصفية" : "Filter")</button>
+            <a href="@Url.Action("Log", "SsprSettings")" class="btn btn-glass btn-sm"><i class="bi bi-x-lg"></i></a>
+        </div>
+    </form>
+</div>
+
+<div class="glass-card p-0" style="overflow:hidden">
+    @if (Model.Any())
+    {
+        <table class="table-glass">
+            <thead>
+                <tr>
+                    <th>@(isAr ? "الوقت" : "Time")</th>
+                    <th>@(isAr ? "اسم المستخدم" : "Username")</th>
+                    <th>@(isAr ? "الدومين" : "Domain")</th>
+                    <th>@(isAr ? "الجوال" : "Phone")</th>
+                    <th>@(isAr ? "المحاولات" : "Attempts")</th>
+                    <th>@(isAr ? "IP" : "IP")</th>
+                    <th>@(isAr ? "الحالة" : "Status")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model)
+                {
+                    var b = Badge(r.Status);
+                    <tr>
+                        <td class="text-muted fs-sm">@r.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td class="fw-600">@r.Username</td>
+                        <td class="fs-sm text-muted">@(domainNames.TryGetValue(r.SsprDomainId, out var dn) ? dn : "—")</td>
+                        <td class="fs-sm" dir="ltr">@Mask(r.PhoneNumber)</td>
+                        <td class="text-center">@r.Attempts</td>
+                        <td class="fs-sm text-muted" dir="ltr">@r.ClientIp</td>
+                        <td><span class="badge-status @b.cls">@(isAr ? b.ar : b.en)</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if ((int)ViewBag.TotalPages > 1)
+        {
+            <div class="d-flex justify-content-between align-items-center p-3">
+                <span class="fs-sm text-muted">@(isAr ? "الإجمالي" : "Total"): <span class="fw-600 text-accent">@ViewBag.TotalCount</span></span>
+                <span class="fs-sm text-muted">@(isAr ? "صفحة" : "Page") @ViewBag.CurrentPage / @ViewBag.TotalPages</span>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="empty-state">
+            <i class="bi bi-journal-lock"></i>
+            <h6>@(isAr ? "لا توجد عمليات" : "No operations yet")</h6>
+            <p class="text-muted">@(isAr ? "لم تُسجَّل أي عملية إعادة تعيين حتى الآن." : "No password reset operations have been recorded yet.")</p>
+        </div>
+    }
+</div>

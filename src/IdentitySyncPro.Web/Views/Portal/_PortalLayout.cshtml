@@ -1,0 +1,94 @@
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    var dir = isAr ? "rtl" : "ltr";
+    var signedIn = User?.Identity?.IsAuthenticated == true
+                   && User.HasClaim(IdentitySyncPro.Web.Controllers.PortalController.PortalClaim, "1");
+}
+<!DOCTYPE html>
+<html lang="@(isAr ? "ar" : "en")" dir="@dir" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] ?? (isAr ? "بوابة الوصول" : "Access Portal"))</title>
+    @* Self-hosted, like everything else: the isolated-network requirement forbids reaching a CDN,
+       and the content-security policy would block it even if a template tried. *@
+    <link href="@Url.Content("~/lib/fonts/fonts.css")" rel="stylesheet" />
+    @if (isAr)
+    {
+        <link href="@Url.Content("~/lib/bootstrap-5.3.3/css/bootstrap.rtl.min.css")" rel="stylesheet">
+    }
+    else
+    {
+        <link href="@Url.Content("~/lib/bootstrap-5.3.3/css/bootstrap.min.css")" rel="stylesheet">
+    }
+    <link href="@Url.Content("~/lib/bootstrap-icons-1.11.3/font/bootstrap-icons.min.css")" rel="stylesheet">
+    <style>
+        body {
+            @* Unquoted on purpose — Razor encodes an apostrophe to &#x27;, and CSS inside a <style>
+               block does not decode HTML entities, so a quoted family name arrives as an invalid
+               declaration and is dropped silently. Both names are valid CSS identifiers. *@
+            font-family: @(isAr ? "Cairo" : "Inter"), sans-serif;
+            min-height: 100vh;
+            margin: 0;
+            background: radial-gradient(ellipse at top, #1e1b4b 0%, #0f0f23 55%, #09090f 100%);
+            color: #e8e8f0;
+        }
+        .portal-shell { max-width: 900px; margin: 0 auto; padding: 28px 18px 48px; }
+        .portal-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 16px;
+        }
+        .portal-narrow { max-width: 460px; margin: 8vh auto 0; }
+        .portal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:22px; flex-wrap:wrap; }
+        .portal-brand { font-weight:700; font-size:1.15rem; }
+        .portal-brand i { color:#8b8bf5; }
+        .form-control, .form-select { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); color:#e8e8f0; }
+        .form-control:focus, .form-select:focus { background: rgba(255,255,255,0.06); color:#e8e8f0; border-color:#6366f1; box-shadow:none; }
+        .table { color:#e8e8f0; }
+        .table > :not(caption) > * > * { border-color: rgba(255,255,255,0.08); }
+        .btn-primary { background:#6366f1; border-color:#6366f1; }
+        .muted { color:#9aa0b4; }
+        .fs-xs { font-size:.78rem; }
+    </style>
+</head>
+<body>
+<div class="portal-shell">
+    <div class="portal-head">
+        <div class="portal-brand">
+            <i class="bi bi-shield-lock-fill me-2"></i>@(isAr ? "بوابة طلب الوصول" : "Access Portal")
+        </div>
+        @if (signedIn)
+        {
+            <div class="d-flex align-items-center gap-2">
+                <span class="muted fs-xs"><i class="bi bi-person-circle me-1"></i>@User!.Identity!.Name</span>
+                <a href="@Url.Action("Index", "Portal")" class="btn btn-sm btn-outline-light">
+                    <i class="bi bi-list-check me-1"></i>@(isAr ? "طلباتي" : "My requests")
+                </a>
+                <form method="post" action="@Url.Action("Logout", "Portal")" class="m-0">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-outline-light">
+                        <i class="bi bi-box-arrow-right me-1"></i>@(isAr ? "خروج" : "Sign out")
+                    </button>
+                </form>
+            </div>
+        }
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i>@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["Error"]</div>
+    }
+
+    @RenderBody()
+</div>
+<script src="@Url.Content("~/lib/bootstrap-5.3.3/js/bootstrap.bundle.min.js")"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

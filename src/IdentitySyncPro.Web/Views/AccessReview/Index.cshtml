@@ -1,0 +1,157 @@
+@using IdentitySyncPro.Core.Models.Governance
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "بانتظار مراجعتي" : "Awaiting My Review";
+    var items = ViewBag.Items as List<GovCampaignItem> ?? new();
+    var campaigns = ViewBag.Campaigns as List<GovCampaign> ?? new();
+    var carried = ViewBag.Carried as IReadOnlyCollection<string> ?? Array.Empty<string>();
+    var selected = ViewBag.SelectedCampaign as int?;
+    var now = DateTime.UtcNow;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h5 class="fw-700 mb-1">
+            <i class="bi bi-clipboard-check-fill me-2 text-accent"></i>@(isAr ? "بانتظار مراجعتي" : "Awaiting My Review")
+        </h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr ? "عضويات عليك أن تقرّر إبقاءها أو سحبها" : "Memberships for you to keep or revoke")
+        </p>
+    </div>
+    <a href="@Url.Action("Delegations")" class="btn btn-glass">
+        <i class="bi bi-person-up me-1"></i>@(isAr ? "التفويض" : "Delegation")
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@* Whose duty you are covering, said plainly. Deciding under somebody else's authority without
+   being told is how a stand-in signs things they did not know were theirs. *@
+@if (carried.Any())
+{
+    <div class="alert alert-info glass-card border-0 fs-sm">
+        <i class="bi bi-person-up me-2"></i>
+        @(isAr ? "أنت تراجع نيابةً عن" : "You are reviewing on behalf of"):
+        <strong>@string.Join("، ", carried)</strong>
+        —
+        @(isAr ? "وسيُسجَّل اسمك واسمه معاً على كل قرار." : "both names are recorded on every decision you take.")
+    </div>
+}
+
+<div class="alert alert-secondary glass-card border-0 fs-xs">
+    <i class="bi bi-info-circle me-2"></i>
+    @(isAr
+        ? "تعرض القائمة الحملات التي وردت فيها باسمك — أو باسم من تنوب عنه — ضمن المُراجِعين. إن كنت مُراجِعاً عبر عضوية مجموعة، فالمراجعة تعمل من رابط الحملة مباشرةً وإن لم تظهر هنا."
+        : "This lists campaigns where you — or someone you stand in for — are named as a reviewer. If you review by group membership, deciding still works from the campaign link.")
+</div>
+
+@if (campaigns.Count > 1)
+{
+    <div class="glass-card mb-3 d-flex align-items-center gap-2 flex-wrap">
+        <span class="fs-sm text-muted">@(isAr ? "تصفية بالحملة:" : "Filter by campaign:")</span>
+        <a href="@Url.Action("Index")" class="btn btn-sm @(selected == null ? "btn-accent" : "btn-glass")">@(isAr ? "الكل" : "All")</a>
+        @foreach (var c in campaigns)
+        {
+            <a href="@Url.Action("Index", new { campaignId = c.Id })"
+               class="btn btn-sm @(selected == c.Id ? "btn-accent" : "btn-glass")">@c.Name</a>
+        }
+    </div>
+}
+
+@if (!items.Any())
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-check2-circle fs-1 text-muted d-block mb-3"></i>
+        <p class="text-muted mb-0">@(isAr ? "لا شيء بانتظار مراجعتك." : "Nothing is waiting on you.")</p>
+    </div>
+}
+else
+{
+    @foreach (var group in items.GroupBy(i => i.Campaign))
+    {
+        var campaign = group.Key!;
+        var due = campaign.DueUtc;
+        var urgent = due != null && (due.Value - now).TotalDays <= 2;
+
+        <div class="glass-card mb-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                <div>
+                    <h6 class="fw-700 mb-1"><i class="bi bi-clipboard-check me-2 text-accent"></i>@campaign.Name</h6>
+                    @if (!string.IsNullOrWhiteSpace(campaign.Description))
+                    {
+                        <div class="text-muted fs-xs">@campaign.Description</div>
+                    }
+                </div>
+                <div class="text-end">
+                    <span class="badge @(urgent ? "badge-danger" : "badge-warning")">
+                        <i class="bi bi-alarm me-1"></i>
+                        @(isAr ? "المهلة" : "due") @due?.ToString("yyyy-MM-dd HH:mm") UTC
+                    </span>
+                    @* The consequence, stated where the decision is taken rather than in the
+                       launch email nobody rereads. *@
+                    <div class="text-danger fs-xs mt-1">
+                        @(isAr
+                            ? $"ما لا يُقرَّر حتى المهلة يُسحب تلقائياً (يتوقف السحب إن تجاوز غير المُراجَع {campaign.MaxUndecidedRevokePercent}٪)"
+                            : $"Anything undecided at the deadline is revoked (stopped if more than {campaign.MaxUndecidedRevokePercent}% went unreviewed)")
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>@(isAr ? "الحساب" : "Account")</th>
+                            <th>@(isAr ? "المجموعة" : "Group")</th>
+                            <th style="width:340px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var item in group)
+                    {
+                        <tr>
+                            <td>
+                                <span dir="ltr">@item.SubjectAccount</span>
+                                @if (!string.IsNullOrWhiteSpace(item.SubjectDisplayName))
+                                {
+                                    <div class="text-muted fs-xs">@item.SubjectDisplayName</div>
+                                }
+                            </td>
+                            <td dir="ltr" class="fs-sm">@item.GroupName</td>
+                            <td>
+                                <form method="post" action="@Url.Action("Decide")" class="d-flex gap-2 align-items-center">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    <input type="hidden" name="campaignId" value="@selected" />
+                                    <input type="text" name="comment" class="form-control form-control-sm bg-transparent"
+                                           placeholder="@(isAr ? "تعليق" : "comment")" />
+                                    <button type="submit" name="decision" value="Keep" class="btn btn-sm btn-glass text-nowrap">
+                                        <i class="bi bi-check-lg me-1"></i>@(isAr ? "إبقاء" : "Keep")
+                                    </button>
+                                    <button type="submit" name="decision" value="Revoke" class="btn btn-sm btn-danger-glass text-nowrap"
+                                            onclick="return confirm('@(isAr ? "سحب هذه العضوية من AD؟" : "Remove this membership from AD?")');">
+                                        <i class="bi bi-x-lg me-1"></i>@(isAr ? "سحب" : "Revoke")
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}

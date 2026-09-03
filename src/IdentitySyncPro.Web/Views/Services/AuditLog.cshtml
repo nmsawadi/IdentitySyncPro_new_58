@@ -1,0 +1,270 @@
+@model List<IdentitySyncPro.Core.Models.Services.SvcAuditEntry>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    var service = (IdentitySyncPro.Core.Models.Services.SvcService)ViewBag.Service;
+    var actionFilter = (string?)ViewBag.ActionFilter;
+    var currentPage = (int)ViewBag.CurrentPage;
+    var totalPages = (int)ViewBag.TotalPages;
+    var totalCount = (int)ViewBag.TotalCount;
+    var counts = ViewBag.ActionCounts as Dictionary<string, int> ?? new Dictionary<string, int>();
+    ViewData["Title"] = isAr ? $"نتائج الخدمة: {service.Name}" : $"Service Results: {service.Name}";
+
+    // ── Presentation of an action, in one place ──────────────────────────────
+    // The previous view carried a per-action if/else chain that every new action had to be
+    // added to, and one that was missed rendered as a blank cell. A single table means an
+    // unknown action degrades to its own name rather than to nothing.
+    (string Badge, string Icon, string Label) Look(string a) => a switch
+    {
+        "RunSummary" => ("badge-info", "bi-clipboard-data", isAr ? "ملخّص التشغيلة" : "Run summary"),
+        "Update" => ("badge-success", "bi-pencil-fill", isAr ? "تحديث" : "Updated"),
+        "NoChange" => ("badge-secondary", "bi-check-circle", isAr ? "بدون تغيير" : "No change"),
+        "NotFound" => ("badge-warning", "bi-question-circle", isAr ? "غير موجود" : "Not found"),
+        "Skip" => ("badge-info", "bi-skip-forward-fill", isAr ? "متخطّى" : "Skipped"),
+        "Error" => ("badge-danger", "bi-exclamation-triangle-fill", isAr ? "خطأ" : "Error"),
+        "Disable" or "Disabled" => ("badge-danger", "bi-person-x-fill", isAr ? "تعطيل" : "Disabled"),
+        "AlreadyDisabled" => ("badge-secondary", "bi-person-dash", isAr ? "معطّل مسبقاً" : "Already disabled"),
+        "ReOffboarded" => ("badge-warning", "bi-arrow-repeat", isAr ? "إعادة إخلاء طرف" : "Re-offboarded"),
+        "EmptyAttrDisabled" => ("badge-warning", "bi-person-fill-slash", isAr ? "تعطيل لنقص بيانات" : "Empty-attr disabled"),
+        "InactiveDisabled" => ("badge-danger", "bi-hourglass-bottom", isAr ? "تعطيل لعدم الاستخدام" : "Inactive disabled"),
+        "PwdNeverExpires" => ("badge-warning", "bi-shield-exclamation", isAr ? "كلمة مرور لا تنتهي" : "Password never expires"),
+        "PwdNeverExpiresRemoved" => ("badge-success", "bi-shield-fill-check", isAr ? "أُزيل «لا تنتهي»" : "Never-expires removed"),
+        "PwdNeverExpiresExcluded" => ("badge-info", "bi-shield-slash", isAr ? "مستثنى من الإزالة" : "Removal excluded"),
+        "PwdNeverExpiresFailed" => ("badge-danger", "bi-shield-fill-x", isAr ? "فشل الإزالة" : "Removal failed"),
+        "ExpiryWarned" => ("badge-warning", "bi-alarm", isAr ? "تنبيه انتهاء" : "Expiry warned"),
+        "ExpiryDisabled" => ("badge-danger", "bi-calendar-x", isAr ? "تعطيل لانتهاء" : "Expiry disabled"),
+        "OrphanFound" => ("badge-warning", "bi-person-exclamation", isAr ? "حساب يتيم" : "Orphan found"),
+        "OrphanDisabled" => ("badge-danger", "bi-person-x", isAr ? "تعطيل يتيم" : "Orphan disabled"),
+        "PrivilegedMember" => ("badge-info", "bi-key-fill", isAr ? "عضو إداري" : "Privileged member"),
+        "PrivilegedNew" => ("badge-danger", "bi-key", isAr ? "عضو إداري جديد" : "New privileged member"),
+        "PrivilegedRemoved" => ("badge-warning", "bi-key", isAr ? "أُزيل من الإداريين" : "Privileged removed"),
+        "DuplicateAccount" => ("badge-warning", "bi-files", isAr ? "حساب مكرّر" : "Duplicate account"),
+        "LockedAccount" => ("badge-danger", "bi-lock-fill", isAr ? "حساب مقفل" : "Locked account"),
+        "AccessMember" => ("badge-info", "bi-people-fill", isAr ? "عضو مجموعة" : "Group member"),
+        "NhiPrivileged" => ("badge-danger", "bi-robot", isAr ? "غير بشري بصلاحيات إدارية" : "Privileged non-human"),
+        "NhiUnowned" => ("badge-warning", "bi-robot", isAr ? "غير بشري بلا مالك" : "Non-human, no owner"),
+        "NhiOwned" => ("badge-info", "bi-robot", isAr ? "غير بشري له مالك" : "Non-human, owned"),
+        "SelfAccountUnresolved" => ("badge-warning", "bi-gear-wide-connected", isAr ? "حساب ربط للنظام لم يُحلّ" : "System bind account unresolved"),
+        "Excluded" => ("badge-info", "bi-shield-check", isAr ? "مستثنى" : "Excluded"),
+        "Aborted" => ("badge-danger", "bi-x-octagon-fill", isAr ? "أُوقفت" : "Aborted"),
+        "Moved" or "Move" => ("badge-purple", "bi-arrow-left-right", isAr ? "نقل" : "Moved"),
+        "SmsSent" => ("badge-success", "bi-chat-dots", isAr ? "SMS مرسل" : "SMS sent"),
+        "SmsFailed" => ("badge-danger", "bi-chat-dots", isAr ? "SMS فاشل" : "SMS failed"),
+        "EmailSent" => ("badge-success", "bi-envelope-check", isAr ? "بريد مرسل" : "Email sent"),
+        "EmailFailed" => ("badge-danger", "bi-envelope-x", isAr ? "بريد فاشل" : "Email failed"),
+        _ => ("badge-secondary", "bi-dot", a)
+    };
+}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="@Url.Action("Logs", new { id = service.Id })" class="btn btn-glass btn-sm">
+        <i class="bi bi-arrow-@(isAr ? "right" : "left")"></i>
+    </a>
+    <div class="flex-grow-1">
+        <h5 class="fw-700 mb-0">
+            <i class="bi bi-list-check me-2 text-info"></i>
+            @(isAr ? "نتائج الخدمة" : "Service Results"): @service.Name
+        </h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr ? $"{totalCount} نتيجة" : $"{totalCount} result(s)")
+            <span class="text-muted">— @(isAr ? "الأحدث أولاً" : "newest first")</span>
+        </p>
+    </div>
+    <a href="@(Context.Request.Path + "?" + Context.Request.QueryString)" class="btn btn-glass btn-sm" title="@(isAr ? "تحديث" : "Refresh")">
+        <i class="bi bi-arrow-clockwise"></i>
+    </a>
+</div>
+
+<!-- Filters: everything is optional, and none of them is required to see data. -->
+<div class="glass-card mb-3">
+    <form method="get" class="d-flex gap-3 align-items-end flex-wrap">
+        <input type="hidden" name="id" value="@service.Id" />
+        <div style="min-width:200px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "بحث (الحساب / المفتاح)" : "Search (account / key)")</label>
+            <input type="text" name="q" class="form-control form-control-sm bg-transparent" value="@ViewBag.SearchTerm"
+                   placeholder="@(isAr ? "رقم وظيفي أو اسم حساب..." : "Employee no. or account...")" />
+        </div>
+        <div style="min-width:170px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "نوع النتيجة" : "Result type")</label>
+            <select name="action" class="form-select form-select-sm bg-transparent">
+                <option value="">@(isAr ? "الكل" : "All")</option>
+                @foreach (var kv in counts.OrderByDescending(k => k.Value))
+                {
+                    <option value="@kv.Key" selected="@(actionFilter == kv.Key)">@Look(kv.Key).Label (@kv.Value)</option>
+                }
+            </select>
+        </div>
+        <div style="min-width:130px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "من تاريخ" : "From")</label>
+            <input type="date" name="dateFrom" class="form-control form-control-sm bg-transparent" value="@ViewBag.DateFrom" />
+        </div>
+        <div style="min-width:130px">
+            <label class="form-label fs-xs text-muted">@(isAr ? "إلى تاريخ" : "To")</label>
+            <input type="date" name="dateTo" class="form-control form-control-sm bg-transparent" value="@ViewBag.DateTo" />
+        </div>
+        <button type="submit" class="btn btn-accent btn-sm">
+            <i class="bi bi-funnel me-1"></i> @(isAr ? "تصفية" : "Filter")
+        </button>
+        <a href="@Url.Action("AuditLog", new { id = service.Id })" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-x-lg me-1"></i> @(isAr ? "مسح" : "Clear")
+        </a>
+        <a href="@Url.Action("ExportAuditLog", new {
+                     id = service.Id,
+                     action = actionFilter,
+                     q = ViewBag.SearchTerm,
+                     dateFrom = ViewBag.DateFrom,
+                     dateTo = ViewBag.DateTo })"
+           class="btn btn-success btn-sm"
+           title="@(isAr ? "يصدّر كل النتائج المطابقة للتصفية، لا الصفحة المعروضة فقط" : "Exports every filtered row, not just the visible page")">
+            <i class="bi bi-file-earmark-excel me-1"></i> @(isAr ? "تصدير Excel" : "Export Excel")
+            @if (totalCount > 0)
+            {
+                <span class="badge bg-light text-dark ms-1">@totalCount</span>
+            }
+        </a>
+    </form>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="glass-card text-center py-5">
+        <div style="font-size:3rem; opacity:.3; margin-bottom:1rem"><i class="bi bi-inbox"></i></div>
+        @if (!string.IsNullOrEmpty(actionFilter) || !string.IsNullOrEmpty(ViewBag.SearchTerm as string) || !string.IsNullOrEmpty(ViewBag.DateFrom as string))
+        {
+            <h6 class="text-muted">@(isAr ? "لا نتائج مطابقة للتصفية" : "No results match the filters")</h6>
+            <a href="@Url.Action("AuditLog", new { id = service.Id })" class="btn btn-glass btn-sm mt-3">
+                <i class="bi bi-x-lg me-1"></i> @(isAr ? "مسح التصفية" : "Clear filters")
+            </a>
+        }
+        else
+        {
+            <h6 class="text-muted">@(isAr ? "لا توجد نتائج لهذه الخدمة بعد" : "No results for this service yet")</h6>
+            <p class="text-muted fs-sm mt-2">@(isAr ? "شغّل الخدمة وستظهر كل نتائجها هنا." : "Run the service and its results will appear here.")</p>
+            <a href="@Url.Action("Logs", new { id = service.Id })" class="btn btn-success btn-sm mt-2">
+                <i class="bi bi-play-fill me-1"></i> @(isAr ? "الذهاب للتشغيلات" : "Go to runs")
+            </a>
+        }
+    </div>
+}
+else
+{
+    <!-- Summary cards, built from whatever actions actually occurred. -->
+    <div class="d-flex gap-2 flex-wrap mb-3">
+        @foreach (var kv in counts.Where(k => k.Key != "RunSummary").OrderByDescending(k => k.Value).Take(8))
+        {
+            var look = Look(kv.Key);
+            <a href="@Url.Action("AuditLog", new { id = service.Id, action = kv.Key, q = ViewBag.SearchTerm, dateFrom = ViewBag.DateFrom, dateTo = ViewBag.DateTo })"
+               class="glass-card py-2 px-3 text-center text-decoration-none @(actionFilter == kv.Key ? "border border-info" : "")"
+               style="min-width:120px; flex:1 1 auto">
+                <div class="fs-xs text-muted"><i class="bi @look.Icon me-1"></i>@look.Label</div>
+                <div class="fs-5 fw-700">@kv.Value</div>
+            </a>
+        }
+    </div>
+
+    <div class="glass-card">
+        <div class="table-responsive">
+            <table class="table-glass w-100">
+                <thead>
+                    <tr>
+                        <th style="width:120px">@(isAr ? "الوقت" : "Time")</th>
+                        <th style="width:170px">@(isAr ? "النتيجة" : "Result")</th>
+                        <th style="width:150px">@(isAr ? "الحساب" : "Account")</th>
+                        <th>@(isAr ? "التفاصيل" : "Details")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var e in Model)
+                {
+                    var look = Look(e.Action);
+                    var isSummary = e.Action == "RunSummary";
+                    var hasBeforeAfter = !string.IsNullOrWhiteSpace(e.OldValue) && !string.IsNullOrWhiteSpace(e.NewValue);
+
+                    <tr style="@(isSummary ? "background:rgba(59,130,246,.06)" : "")">
+                        <td class="fs-xs text-muted text-nowrap">
+                            @e.Timestamp.ToLocalTime().ToString("MM/dd HH:mm:ss")
+                        </td>
+                        <td>
+                            <span class="badge-status @look.Badge fs-xs">
+                                <i class="bi @look.Icon me-1"></i>@look.Label
+                            </span>
+                        </td>
+                        <td class="fw-600 fs-sm">
+                            @e.KeyValue
+                            @if (!string.IsNullOrWhiteSpace(e.ADIdentity) && !isSummary)
+                            {
+                                <div class="fs-xs text-muted text-truncate" style="max-width:220px" title="@e.ADIdentity">@e.ADIdentity</div>
+                            }
+                        </td>
+                        <td class="fs-sm">
+                            @* One renderer for every action. Anything that recorded a before and an
+                               after shows as a change; anything else shows what it recorded. *@
+                            @if (isSummary)
+                            {
+                                <div class="fw-600 fs-xs mb-1" style="color:var(--info)">@e.AttributeName</div>
+                                @if (!string.IsNullOrWhiteSpace(e.OldValue))
+                                {
+                                    <div class="fs-xs text-muted" style="white-space:pre-wrap">@e.OldValue</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(e.NewValue))
+                                {
+                                    <div class="fs-xs mt-1" style="white-space:pre-wrap; color:var(--success)">@e.NewValue</div>
+                                }
+                            }
+                            else if (hasBeforeAfter)
+                            {
+                                <div style="line-height:1.8">
+                                    @if (!string.IsNullOrWhiteSpace(e.AttributeName))
+                                    {
+                                        <code class="text-accent">@e.AttributeName</code><br />
+                                    }
+                                    <span style="color:var(--danger); text-decoration:line-through; opacity:.7">@e.OldValue</span>
+                                    <i class="bi bi-arrow-@(isAr ? "left" : "right") mx-1" style="font-size:.7rem; color:var(--accent-primary)"></i>
+                                    <span style="color:var(--success); font-weight:600">@e.NewValue</span>
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(e.NewValue) || !string.IsNullOrWhiteSpace(e.AttributeName))
+                            {
+                                <div style="line-height:1.7">
+                                    @if (!string.IsNullOrWhiteSpace(e.AttributeName))
+                                    {
+                                        <code class="fs-xs text-accent">@e.AttributeName</code>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(e.NewValue))
+                                    {
+                                        @if (!string.IsNullOrWhiteSpace(e.AttributeName)) { <br /> }
+                                        <span class="fs-xs">@e.NewValue</span>
+                                    }
+                                </div>
+                            }
+                            else if (string.IsNullOrWhiteSpace(e.ErrorMessage))
+                            {
+                                <span class="fs-xs text-muted">—</span>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(e.ErrorMessage))
+                            {
+                                <div class="fs-xs mt-1" style="color:var(--danger)">
+                                    <i class="bi bi-exclamation-circle me-1"></i>@e.ErrorMessage
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    @await Html.PartialAsync("_SmartPagination", new ViewDataDictionary(ViewData) {
+        { "PgCurrent", currentPage },
+        { "PgTotal", totalPages },
+        { "PgBaseUrl", Url.Action("AuditLog") + "?" +
+            $"id={service.Id}" +
+            (!string.IsNullOrEmpty(actionFilter) ? $"&action={actionFilter}" : "") +
+            (!string.IsNullOrEmpty(ViewBag.SearchTerm as string) ? $"&q={Uri.EscapeDataString((string)ViewBag.SearchTerm)}" : "") +
+            (!string.IsNullOrEmpty(ViewBag.DateFrom as string) ? $"&dateFrom={ViewBag.DateFrom}" : "") +
+            (!string.IsNullOrEmpty(ViewBag.DateTo as string) ? $"&dateTo={ViewBag.DateTo}" : "") +
+            "&page=" }
+    })
+}

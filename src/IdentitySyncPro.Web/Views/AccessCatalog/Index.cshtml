@@ -1,0 +1,158 @@
+@model List<IdentitySyncPro.Core.Models.Governance.GovCatalogItem>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "كتالوج الوصول" : "Access Catalog";
+    var tenants = ViewBag.TenantNames as Dictionary<int, string> ?? new();
+    var problems = ViewBag.Problems as Dictionary<int, string?> ?? new();
+    var pending = ViewBag.PendingCounts as Dictionary<int, int> ?? new();
+    var broken = problems.Count(p => p.Value != null);
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h5 class="fw-700 mb-1">
+            <i class="bi bi-journal-check me-2 text-accent"></i>@(isAr ? "كتالوج الوصول" : "Access Catalog")
+        </h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr ? "ما يمكن للموظفين طلبه، ومن يعتمده" : "What can be requested, and who approves it")
+        </p>
+    </div>
+    <a href="@Url.Action("Edit")" class="btn btn-accent">
+        <i class="bi bi-plus-lg me-1"></i>@(isAr ? "عنصر جديد" : "New entry")
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@* Shown on the list, not only refused on save. An entry that a later edit — a removed approver, a
+   deleted tenant — pushed into an unusable state would otherwise sit here looking healthy while
+   every request against it waits for a decision nobody can make. *@
+@if (broken > 0)
+{
+    <div class="alert alert-danger glass-card border-0">
+        <i class="bi bi-exclamation-octagon-fill me-2"></i>
+        <strong>
+            @(isAr ? $"{broken} عنصر غير قابل للاستخدام" : $"{broken} entry/entries cannot be used")
+        </strong>
+        —
+        @(isAr ? "لا تظهر للطالبين، وأي طلب قائم عليها لا يستطيع أحد أن يقرّره. التفاصيل تحت كل صفّ."
+               : "They are hidden from requesters, and any request already on them cannot be decided. Details on each row.")
+    </div>
+}
+
+@if (!Model.Any())
+{
+    <div class="glass-card text-center py-5">
+        <i class="bi bi-journal-plus fs-1 text-muted d-block mb-3"></i>
+        <p class="text-muted mb-3">@(isAr ? "الكتالوج فارغ — لا يوجد شيء يمكن طلبه." : "The catalog is empty — there is nothing to request.")</p>
+        <a href="@Url.Action("Edit")" class="btn btn-accent"><i class="bi bi-plus-lg me-1"></i>@(isAr ? "عنصر جديد" : "New entry")</a>
+    </div>
+}
+else
+{
+    <div class="glass-card p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>@(isAr ? "الاسم" : "Name")</th>
+                        <th>@(isAr ? "المجموعة" : "Group")</th>
+                        <th>@(isAr ? "الجهة" : "Tenant")</th>
+                        <th>@(isAr ? "المُعتمِدون" : "Approvers")</th>
+                        <th>@(isAr ? "المدة" : "Duration")</th>
+                        <th>@(isAr ? "الحالة" : "Status")</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model)
+                {
+                    var problem = problems.TryGetValue(item.Id, out var p) ? p : null;
+                    var waiting = pending.TryGetValue(item.Id, out var c) ? c : 0;
+
+                    <tr class="@(problem != null ? "table-danger" : "")">
+                        <td>
+                            <div class="fw-600">@item.DisplayName</div>
+                            @if (!string.IsNullOrWhiteSpace(item.Description))
+                            {
+                                <div class="text-muted fs-xs">@item.Description</div>
+                            }
+                            @if (problem != null)
+                            {
+                                <div class="text-danger fs-xs mt-1">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>@problem
+                                </div>
+                            }
+                        </td>
+                        <td dir="ltr" class="fs-sm">@item.GroupName</td>
+                        <td class="fs-sm">@(tenants.TryGetValue(item.TenantId, out var t) ? t : $"#{item.TenantId}")</td>
+                        <td class="fs-xs">
+                            @if (!string.IsNullOrWhiteSpace(item.ApproverUsers))
+                            {
+                                <div><i class="bi bi-person-check me-1"></i>@item.ApproverUsers</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.ApproverAdGroup))
+                            {
+                                <div dir="ltr"><i class="bi bi-people me-1"></i>@item.ApproverAdGroup</div>
+                            }
+                            @if (string.IsNullOrWhiteSpace(item.ApproverNotificationEmail))
+                            {
+                                @* Not fatal, but worth seeing: without a mailbox the notice depends
+                                   on each approver having a mail attribute in AD. *@
+                                <div class="text-warning"><i class="bi bi-envelope-slash me-1"></i>@(isAr ? "بلا بريد إشعار" : "no notification mailbox")</div>
+                            }
+                        </td>
+                        <td class="fs-xs">
+                            @(item.AccessDurationDays > 0
+                                ? (isAr ? $"{item.AccessDurationDays} يوماً" : $"{item.AccessDurationDays} days")
+                                : (isAr ? "دائم" : "permanent"))
+                        </td>
+                        <td>
+                            @if (item.IsEnabled)
+                            {
+                                <span class="badge badge-success"><i class="bi bi-check-circle me-1"></i>@(isAr ? "مفعّل" : "Enabled")</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-secondary"><i class="bi bi-pause-circle me-1"></i>@(isAr ? "موقوف" : "Disabled")</span>
+                            }
+                            @if (waiting > 0)
+                            {
+                                <span class="badge badge-warning ms-1" title="@(isAr ? "طلبات بانتظار قرار" : "requests awaiting a decision")">
+                                    <i class="bi bi-hourglass-split me-1"></i>@waiting
+                                </span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <a href="@Url.Action("Edit", new { id = item.Id })" class="btn btn-glass btn-sm">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="post" action="@Url.Action("Toggle")" class="d-inline"
+                                  onsubmit="return confirm('@(isAr ? "تغيير حالة هذا العنصر؟ لا يمسّ وصولاً مُنح سابقاً." : "Change this entry? Access already granted is untouched.")');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button type="submit" class="btn btn-glass btn-sm">
+                                    <i class="bi bi-@(item.IsEnabled ? "pause" : "play")-fill"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

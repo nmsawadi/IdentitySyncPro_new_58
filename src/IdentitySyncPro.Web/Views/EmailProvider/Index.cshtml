@@ -1,0 +1,87 @@
+@model List<IdentitySyncPro.Core.Models.Settings.EmailProvider>
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    ViewData["Title"] = isAr ? "إعدادات البريد" : "Email Settings";
+    string ModeLabel(string m) => m == "DirectSend" ? (isAr ? "إرسال مباشر" : "Direct Send") : (isAr ? "SMTP مُصادق" : "Authenticated SMTP");
+}
+@Html.AntiForgeryToken()
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h5 class="fw-700 mb-1"><i class="bi bi-envelope-at-fill me-2 text-accent"></i>@(isAr ? "مزودو البريد الإلكتروني" : "Email Providers")</h5>
+        <p class="text-muted fs-sm mb-0">@(isAr ? "إعداد طريقة إرسال البريد — أضِف الطرق واختَر الفعّالة" : "Configure email delivery — add methods and pick the active one")</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="@Url.Action("Index", "SmsCenter")" class="btn btn-glass"><i class="bi bi-chat-dots me-1"></i>@(isAr ? "الرسائل" : "SMS")</a>
+        <a href="@Url.Action("Create")" class="btn btn-accent"><i class="bi bi-plus-lg me-1"></i>@(isAr ? "مزود جديد" : "New Provider")</a>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success glass-card border-0"><i class="bi bi-check-circle-fill me-2"></i>@TempData["Success"]</div>
+}
+
+@if (Model.Count == 0)
+{
+    <div class="glass-card border-0 p-5 text-center text-muted">
+        <i class="bi bi-envelope-plus fs-1 d-block mb-3"></i>
+        @(isAr ? "لا يوجد مزود بريد بعد. أضِف واحداً لتفعيل إشعارات البريد." : "No email provider yet. Add one to enable email notifications.")
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var p in Model)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="glass-card border-0 p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <div class="fw-700">@p.Name</div>
+                            <span class="badge bg-light text-dark">@ModeLabel(p.Mode)</span>
+                            @if (p.IsActive)
+                            {
+                                <span class="badge bg-success">@(isAr ? "فعّال" : "Active")</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="fs-sm text-muted mb-1"><i class="bi bi-hdd-network me-1"></i>@p.SmtpHost:@p.SmtpPort @(p.EnableSsl ? "(SSL)" : "")</div>
+                    <div class="fs-sm text-muted mb-3"><i class="bi bi-person me-1"></i>@(p.Mode == "Authenticated" ? (p.Username ?? "—") : (isAr ? "بلا مصادقة" : "no auth")) · @(p.FromEmail ?? "—")</div>
+
+                    <div class="d-flex gap-1 flex-wrap">
+                        <a href="@Url.Action("Edit", new { id = p.Id })" class="btn btn-sm btn-glass"><i class="bi bi-pencil"></i></a>
+                        <button class="btn btn-sm btn-glass btn-toggle" data-id="@p.Id">@(p.IsActive ? (isAr ? "إلغاء التفعيل" : "Deactivate") : (isAr ? "تفعيل" : "Activate"))</button>
+                        <button class="btn btn-sm btn-glass btn-test" data-id="@p.Id"><i class="bi bi-send"></i> @(isAr ? "اختبار" : "Test")</button>
+                        <form method="post" action="@Url.Action("Delete", new { id = p.Id })" class="d-inline" onsubmit="return confirm('@(isAr ? "حذف المزود؟" : "Delete provider?")')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-sm btn-danger-glass"><i class="bi bi-trash3"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@section Scripts {
+<script>
+    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+    const isAr = @(isAr ? "true" : "false");
+
+    document.querySelectorAll('.btn-toggle').forEach(b => b.addEventListener('click', async () => {
+        const body = new URLSearchParams(); body.append('id', b.dataset.id);
+        const res = await fetch('@Url.Action("ToggleActive")', { method:'POST', headers:{'RequestVerificationToken':token,'Content-Type':'application/x-www-form-urlencoded'}, body });
+        if ((await res.json()).success) location.reload();
+    }));
+
+    document.querySelectorAll('.btn-test').forEach(b => b.addEventListener('click', async () => {
+        const to = prompt(isAr ? 'أدخل بريد المستلم للاختبار:' : 'Enter recipient email for the test:');
+        if (!to) return;
+        const body = new URLSearchParams(); body.append('id', b.dataset.id); body.append('toEmail', to);
+        const res = await fetch('@Url.Action("Test")', { method:'POST', headers:{'RequestVerificationToken':token,'Content-Type':'application/x-www-form-urlencoded'}, body });
+        const data = await res.json();
+        alert(data.success ? (isAr ? '✅ تم إرسال بريد الاختبار' : '✅ Test email sent') : (isAr ? '❌ فشل: ' : '❌ Failed: ') + (data.error || ''));
+    }));
+</script>
+}

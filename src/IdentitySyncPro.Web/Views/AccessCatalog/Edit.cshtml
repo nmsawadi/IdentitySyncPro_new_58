@@ -1,0 +1,159 @@
+@model IdentitySyncPro.Core.Models.Governance.GovCatalogItem
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? (isAr ? "عنصر كتالوج جديد" : "New Catalog Entry") : Model.DisplayName;
+    var tenants = ViewBag.Tenants as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="@Url.Action("Index")" class="btn btn-glass btn-sm"><i class="bi bi-arrow-@(isAr ? "right" : "left")"></i></a>
+    <div>
+        <h5 class="fw-700 mb-1">
+            <i class="bi bi-journal-check me-2 text-accent"></i>
+            @(isNew ? (isAr ? "عنصر كتالوج جديد" : "New Catalog Entry") : Model.DisplayName)
+        </h5>
+        <p class="text-muted fs-sm mb-0">
+            @(isAr ? "عضوية مجموعة AD يمكن للموظفين طلبها" : "An AD group membership employees may request")
+        </p>
+    </div>
+</div>
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show glass-card border-0" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<form method="post" action="@Url.Action("Edit")">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <input type="hidden" name="TargetType" value="AdGroup" />
+
+    <div class="glass-card">
+        <h6 class="fw-700 mb-3"><i class="bi bi-box me-2 text-primary"></i>@(isAr ? "ما يمنحه" : "What it grants")</h6>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">@(isAr ? "الاسم المعروض" : "Display name") <span class="text-danger">*</span></label>
+                <input type="text" name="DisplayName" class="form-control bg-transparent" value="@Model.DisplayName" required
+                       placeholder="@(isAr ? "شبكة المختبرات" : "Lab network")" />
+                <div class="form-text">@(isAr ? "ما يراه الطالب — لا اسم المجموعة التقني بالضرورة" : "What the requester sees — not necessarily the technical group name")</div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">@(isAr ? "مجموعة AD" : "AD group") <span class="text-danger">*</span></label>
+                <input type="text" name="GroupName" class="form-control bg-transparent" value="@Model.GroupName" dir="ltr" required
+                       placeholder="Lab-Network" />
+                <div class="form-text">@(isAr ? "اسم المجموعة أو DN كامل" : "Group name or full DN")</div>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">@(isAr ? "الجهة" : "Tenant") <span class="text-danger">*</span></label>
+                <select name="TenantId" class="form-select bg-transparent" required>
+                    <option value="">@(isAr ? "— اختر —" : "— choose —")</option>
+                    @foreach (var t in tenants)
+                    {
+                        <option value="@t.Id" selected="@(Model.TenantId == t.Id)">@t.TenantName</option>
+                    }
+                </select>
+                <div class="form-text">
+                    @* Required, and this is why: the group has to be reached through some AD
+                       connection, and in a multi-tenant install there is more than one. *@
+                    @(isAr ? "اتصال AD الذي يُنفَّذ عليه المنح والسحب. إلزامي — المجموعة بلا جهة مجموعةٌ لا يُعرف أي دليل تُنفَّذ فيه."
+                           : "The AD connection the grant and revoke run through. Required — a group with no tenant names no directory.")
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">@(isAr ? "الوصف" : "Description")</label>
+                <input type="text" name="Description" class="form-control bg-transparent" value="@Model.Description"
+                       placeholder="@(isAr ? "يُعرض للطالب وللمُعتمِد" : "Shown to the requester and the approver")" />
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card mt-3">
+        <h6 class="fw-700 mb-3"><i class="bi bi-person-check-fill me-2 text-primary"></i>@(isAr ? "من يعتمد" : "Who approves")</h6>
+
+        <div class="alert alert-warning py-2 px-3 fs-xs">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            @(isAr
+                ? "لا بد من مُعتمِد واحد على الأقل — قائمة أسماء أو مجموعة. بدونه تُقبل الطلبات وتبقى معلّقة إلى الأبد ولا يستطيع أحد أن يقرّرها، وهو طابور معطّل يبدو كأنه طابور عمل."
+                : "At least one approver is required — a name list or a group. Without one, requests are accepted, stay pending forever, and nobody can decide them: a broken queue that looks like a busy one.")
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">@(isAr ? "مستخدمو كونسول معتمِدون" : "Named console approvers")</label>
+                <input type="text" name="ApproverUsers" class="form-control bg-transparent" value="@Model.ApproverUsers"
+                       dir="ltr" placeholder="manager1, manager2" />
+                <div class="form-text">
+                    @(isAr ? "مفصولون بفاصلة. هؤلاء وحدهم تظهر لهم الطلبات في شاشة «بانتظار اعتمادي»."
+                           : "Comma-separated. Only these see the request on the \"Awaiting my decision\" screen.")
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">@(isAr ? "مجموعة AD للمُعتمِدين" : "Approver AD group")</label>
+                <input type="text" name="ApproverAdGroup" class="form-control bg-transparent" value="@Model.ApproverAdGroup"
+                       dir="ltr" placeholder="Access-Approvers" />
+                <div class="form-text">
+                    @(isAr ? "تشمل العضوية المتداخلة. يعتمد أعضاؤها من رابط الطلب، ولا تُبنى منها قائمة «بانتظار اعتمادي»."
+                           : "Nested membership included. Members decide from the request link; the queue screen is not built from this.")
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">@(isAr ? "بريد إشعار المُعتمِدين" : "Approver notification mailbox")</label>
+                <input type="email" name="ApproverNotificationEmail" class="form-control bg-transparent"
+                       value="@Model.ApproverNotificationEmail" dir="ltr" placeholder="approvers@example.edu" />
+                <div class="form-text">
+                    @(isAr ? "غالباً القائمة البريدية للمجموعة. إن تُرك فارغاً تُقرأ سمة mail لكل مُعتمِد مسمّى من AD — وإن لم يُوجد عنوان لأحد، سُجِّل ذلك في سجل التدقيق ولم يُبتلع."
+                           : "Usually the group's distribution list. Left empty, each named approver's mail attribute is read from AD — and if nobody can be reached, that is recorded in the audit trail rather than swallowed.")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card mt-3">
+        <h6 class="fw-700 mb-3"><i class="bi bi-clock-history me-2 text-primary"></i>@(isAr ? "من يطلب، والمهل" : "Who may request, and for how long")</h6>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">@(isAr ? "مجموعة المؤهَّلين للطلب" : "Eligible requester group")</label>
+                <input type="text" name="EligibleRequesterGroup" class="form-control bg-transparent"
+                       value="@Model.EligibleRequesterGroup" dir="ltr" placeholder="@(isAr ? "فارغ = متاح للجميع" : "empty = open to everyone")" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@(isAr ? "مهلة القرار (أيام)" : "Decision window (days)")</label>
+                <input type="number" name="DecisionDueDays" class="form-control bg-transparent"
+                       value="@(isNew ? 7 : Model.DecisionDueDays)" min="0" />
+                <div class="form-text">@(isAr ? "0 = بلا مهلة، يبقى معلّقاً حتى يُقرَّر" : "0 = no deadline; it waits until decided")</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@(isAr ? "مدة الوصول (أيام)" : "Access duration (days)")</label>
+                <input type="number" name="AccessDurationDays" class="form-control bg-transparent"
+                       value="@Model.AccessDurationDays" min="0" />
+                <div class="form-text">
+                    @(isAr ? "0 = دائم. أي قيمة أكبر تجعل السحب تلقائياً بعدها — وهو ما يمنع تراكم الصلاحيات."
+                           : "0 = permanent. Anything higher revokes automatically afterwards — which is what stops permissions accumulating.")
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="IsEnabled" value="true" id="chkEnabled"
+                           checked="@(isNew || Model.IsEnabled)" />
+                    <input type="hidden" name="IsEnabled" value="false" />
+                    <label class="form-check-label" for="chkEnabled">@(isAr ? "متاح للطلب" : "Available to request")</label>
+                </div>
+                <div class="form-text">@(isAr ? "إيقافه يمنع الطلبات الجديدة ولا يمسّ وصولاً مُنح سابقاً." : "Disabling stops new requests; access already granted is untouched.")</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card mt-3 d-flex justify-content-between">
+        <a href="@Url.Action("Index")" class="btn btn-glass">@(isAr ? "إلغاء" : "Cancel")</a>
+        <button type="submit" class="btn btn-accent btn-lg">
+            <i class="bi bi-check-lg me-1"></i>@(isAr ? "حفظ" : "Save")
+        </button>
+    </div>
+</form>

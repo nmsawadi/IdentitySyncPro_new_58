@@ -1,0 +1,254 @@
+@{
+    Layout = null;
+    var error = ViewBag.Error as string;
+    // The application's configured language decides how the page first renders. The toggle below
+    // then switches it client-side: /Home/SetLanguage requires authentication, and exposing an
+    // anonymous endpoint that writes a global setting is not worth a language switch.
+    var lang = (ViewBag.Lang as string) == "en" ? "en" : "ar";
+    var isAr = lang == "ar";
+}
+<!DOCTYPE html>
+<html lang="@lang" dir="@(isAr ? "rtl" : "ltr")" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(isAr ? "تسجيل الدخول" : "Sign in") - IdentitySync Pro</title>
+    <link href="~/lib/fonts/fonts.css" rel="stylesheet" />
+    @* Both directions are loaded so the toggle can switch without a round trip. *@
+    @* Url.Content rather than a bare "~/": Razor resolves "~/" only for a literal attribute, and
+       the conditional `disabled` in the same tag makes it treat the element as a tag helper. *@
+    <link id="bsRtl" href="@Url.Content("~/lib/bootstrap-5.3.3/css/bootstrap.rtl.min.css")" rel="stylesheet" @(isAr ? "" : "disabled") />
+    <link id="bsLtr" href="@Url.Content("~/lib/bootstrap-5.3.3/css/bootstrap.min.css")" rel="stylesheet" @(isAr ? "disabled" : "") />
+    <link href="~/lib/bootstrap-icons-1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at top, #1e1b4b 0%, #0f0f23 55%, #09090f 100%);
+        }
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            padding: 40px 36px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(18px);
+            box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+            position: relative;
+        }
+        .brand-icon {
+            width: 56px; height: 56px; border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            font-size: 26px; color: #fff;
+            margin: 0 auto 14px;
+        }
+        .form-control {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 12px 14px;
+        }
+        .form-control:focus { background: rgba(255,255,255,0.07); border-color: #6366f1; box-shadow: none; }
+        .btn-login {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border: none; padding: 12px; font-weight: 700;
+        }
+        .btn-login:hover { filter: brightness(1.1); }
+        .form-control.is-invalid { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.15); }
+        .field-error { color: #f87171; font-size: 0.78rem; margin-top: 5px; display: flex; align-items: center; gap: 5px; }
+
+        /* Language toggle — pinned to the card's top corner in whichever direction is active */
+        .lang-toggle {
+            position: absolute;
+            top: 14px;
+            inset-inline-end: 16px;
+            display: flex;
+            gap: 2px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            padding: 2px;
+        }
+        .lang-toggle button {
+            background: none; border: none; color: rgba(255,255,255,0.55);
+            font-size: 0.72rem; font-weight: 700; letter-spacing: .04em;
+            padding: 3px 10px; border-radius: 999px; cursor: pointer;
+            font-family: inherit; line-height: 1.6;
+        }
+        .lang-toggle button:hover { color: #fff; }
+        .lang-toggle button.active { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; }
+        .lang-toggle button:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="lang-toggle" role="group" aria-label="Language">
+            <button type="button" data-lang="ar" class="@(isAr ? "active" : "")" onclick="setLoginLang('ar')">ع</button>
+            <button type="button" data-lang="en" class="@(isAr ? "" : "active")" onclick="setLoginLang('en')">EN</button>
+        </div>
+
+        <div class="text-center mb-4">
+            <div class="brand-icon"><i class="bi bi-shield-lock-fill"></i></div>
+            <h4 class="fw-bold mb-1">IdentitySync Pro</h4>
+            <p class="text-muted small mb-0">
+                <span data-i18n="tagline">@(isAr ? "منصة إدارة ومزامنة الهويات المؤسسية" : "Enterprise Identity Management")</span>
+                <br /><span style="opacity:.6" data-i18n="taglineSub">@(isAr ? "Enterprise Identity Management" : "منصة إدارة ومزامنة الهويات المؤسسية")</span>
+            </p>
+        </div>
+
+        @if (error == "invalid")
+        {
+            <div class="alert alert-danger py-2 small">
+                <i class="bi bi-x-circle me-1"></i>
+                <span data-i18n="errInvalid">@(isAr ? "بيانات الدخول غير صحيحة" : "Incorrect username or password")</span>
+            </div>
+        }
+        else if (error == "locked")
+        {
+            <div class="alert alert-warning py-2 small">
+                <i class="bi bi-lock-fill me-1"></i>
+                <span data-i18n="errLocked">@(isAr ? "الحساب مقفل مؤقتاً بسبب محاولات متكررة — حاول بعد 15 دقيقة" : "Account temporarily locked after repeated attempts — try again in 15 minutes")</span>
+            </div>
+        }
+
+        <form method="post" action="@Url.Action("Login", "Account")" id="loginForm" novalidate>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
+            <div class="mb-3">
+                <label class="form-label small text-muted" for="username" data-i18n="username">@(isAr ? "اسم المستخدم" : "Username")</label>
+                <input type="text" id="username" name="username" class="form-control" autofocus autocomplete="username" required />
+            </div>
+            <div class="mb-4">
+                <label class="form-label small text-muted" for="password" data-i18n="password">@(isAr ? "كلمة المرور" : "Password")</label>
+                <input type="password" id="password" name="password" class="form-control" autocomplete="current-password" required />
+            </div>
+            <button type="submit" class="btn btn-primary btn-login w-100">
+                <i class="bi @(isAr ? "bi-box-arrow-in-left" : "bi-box-arrow-in-right") me-1" id="loginIcon"></i>
+                <span data-i18n="signIn">@(isAr ? "تسجيل الدخول" : "Sign in")</span>
+            </button>
+        </form>
+
+        <p class="text-center text-muted mt-4 mb-0" style="font-size:0.75rem" data-i18n="hint">
+            @(isAr
+                ? "يمكن الدخول بحساب محلي أو بحساب Active Directory حسب إعداد المستخدم"
+                : "Sign in with a local account or an Active Directory account, depending on how your user is configured")
+        </p>
+    </div>
+
+    <script>
+        var LOGIN_I18N = {
+            ar: {
+                title: 'تسجيل الدخول - IdentitySync Pro',
+                tagline: 'منصة إدارة ومزامنة الهويات المؤسسية',
+                taglineSub: 'Enterprise Identity Management',
+                username: 'اسم المستخدم',
+                password: 'كلمة المرور',
+                signIn: 'تسجيل الدخول',
+                hint: 'يمكن الدخول بحساب محلي أو بحساب Active Directory حسب إعداد المستخدم',
+                required: 'هذا الحقل مطلوب',
+                errInvalid: 'بيانات الدخول غير صحيحة',
+                errLocked: 'الحساب مقفل مؤقتاً بسبب محاولات متكررة — حاول بعد 15 دقيقة'
+            },
+            en: {
+                title: 'Sign in - IdentitySync Pro',
+                tagline: 'Enterprise Identity Management',
+                taglineSub: 'منصة إدارة ومزامنة الهويات المؤسسية',
+                username: 'Username',
+                password: 'Password',
+                signIn: 'Sign in',
+                hint: 'Sign in with a local account or an Active Directory account, depending on how your user is configured',
+                required: 'This field is required',
+                errInvalid: 'Incorrect username or password',
+                errLocked: 'Account temporarily locked after repeated attempts — try again in 15 minutes'
+            }
+        };
+
+        var loginLang = '@lang';
+
+        function setLoginLang(lang) {
+            if (lang !== 'ar' && lang !== 'en') return;
+            loginLang = lang;
+
+            var dict = LOGIN_I18N[lang];
+            var isAr = lang === 'ar';
+
+            document.documentElement.lang = lang;
+            document.documentElement.dir = isAr ? 'rtl' : 'ltr';
+            document.title = dict.title;
+
+            // Bootstrap ships direction as two separate stylesheets; swap which one applies.
+            document.getElementById('bsRtl').disabled = !isAr;
+            document.getElementById('bsLtr').disabled = isAr;
+
+            document.querySelectorAll('[data-i18n]').forEach(function (el) {
+                var val = dict[el.dataset.i18n];
+                if (val) el.textContent = val;
+            });
+
+            var icon = document.getElementById('loginIcon');
+            if (icon) {
+                icon.classList.toggle('bi-box-arrow-in-left', isAr);
+                icon.classList.toggle('bi-box-arrow-in-right', !isAr);
+            }
+
+            document.querySelectorAll('.lang-toggle button').forEach(function (b) {
+                b.classList.toggle('active', b.dataset.lang === lang);
+            });
+
+            // Any validation message already on screen must follow the switch too.
+            document.querySelectorAll('.field-error span').forEach(function (s) {
+                s.textContent = dict.required;
+            });
+
+            // Remembered for this browser only. The application-wide language stays an admin
+            // setting; this is a convenience for whoever is standing at the sign-in screen.
+            try { localStorage.setItem('isp-login-lang', lang); } catch (e) { /* private mode */ }
+        }
+
+        (function () {
+            try {
+                var saved = localStorage.getItem('isp-login-lang');
+                if (saved && saved !== loginLang) setLoginLang(saved);
+            } catch (e) { /* private mode — keep the server-rendered language */ }
+        })();
+
+        // Inline validation (no native browser bubbles)
+        (function () {
+            var form = document.getElementById('loginForm');
+            function clearError(inp) {
+                inp.classList.remove('is-invalid');
+                var e = inp.parentElement.querySelector('.field-error');
+                if (e) e.remove();
+            }
+            function showError(inp) {
+                inp.classList.add('is-invalid');
+                if (inp.parentElement.querySelector('.field-error')) return;
+                var div = document.createElement('div');
+                div.className = 'field-error';
+                var icon = document.createElement('i');
+                icon.className = 'bi bi-exclamation-circle';
+                var span = document.createElement('span');
+                span.textContent = LOGIN_I18N[loginLang].required;
+                div.appendChild(icon);
+                div.appendChild(span);
+                inp.insertAdjacentElement('afterend', div);
+            }
+            form.addEventListener('submit', function (e) {
+                var first = null;
+                form.querySelectorAll('input[required]').forEach(function (inp) {
+                    clearError(inp);
+                    if (!inp.value.trim()) { showError(inp); if (!first) first = inp; }
+                });
+                if (first) { e.preventDefault(); first.focus(); }
+            });
+            form.querySelectorAll('input').forEach(function (inp) {
+                inp.addEventListener('input', function () { clearError(inp); });
+            });
+        })();
+    </script>
+</body>
+</html>

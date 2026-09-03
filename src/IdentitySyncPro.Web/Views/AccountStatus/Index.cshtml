@@ -1,0 +1,1323 @@
+@{
+    ViewData["Title"] = ViewBag.Lang == "en" ? "Account Enable/Disable" : "تعطيل وتفعيل الحسابات";
+    var isAr = ViewBag.Lang as string != "en";
+    var domains = ViewBag.Domains as List<IdentitySyncPro.Web.Controllers.DomainInfo> ?? new();
+    var logs = Model as List<IdentitySyncPro.Core.Models.AccountStatus.AccountStatusLog> ?? new();
+}
+@Html.AntiForgeryToken()
+
+<style>
+    /* === Account Status Page Styles === */
+    .search-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 28px;
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .search-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--accent-gradient);
+    }
+
+    .search-section .section-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .search-section .section-title .icon-box {
+        width: 44px;
+        height: 44px;
+        background: var(--accent-gradient);
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        color: white;
+        box-shadow: var(--shadow-glow);
+    }
+
+    .search-section .section-title h5 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 18px;
+    }
+
+    .search-section .section-title p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .search-row {
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .search-row .field-group {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .search-row .field-group label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .search-row .field-group .form-control,
+    .search-row .field-group .form-select {
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        padding: 10px 14px;
+        font-size: 13.5px;
+        transition: all 0.2s ease;
+        width: 100%;
+    }
+
+    .search-row .field-group .form-control:focus,
+    .search-row .field-group .form-select:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+        background: var(--bg-card);
+    }
+
+    /* User Card */
+    .user-result-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 28px;
+        margin-bottom: 24px;
+        display: none;
+        animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .user-result-card.visible {
+        display: block;
+    }
+
+    .user-result-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+    }
+
+    .user-result-card.status-enabled::before {
+        background: linear-gradient(90deg, #10b981, #34d399);
+    }
+
+    .user-result-card.status-disabled::before {
+        background: linear-gradient(90deg, #ef4444, #f87171);
+    }
+
+    @@keyframes slideDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .user-avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: 800;
+        flex-shrink: 0;
+    }
+
+    .user-avatar.enabled {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+    }
+
+    .user-avatar.disabled {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+    }
+
+    .user-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 16px;
+        margin: 20px 0;
+    }
+
+    .user-info-item {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        padding: 12px 16px;
+    }
+
+    .user-info-item .info-label {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+
+    .user-info-item .info-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        word-break: break-all;
+    }
+
+    .action-section {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 20px;
+        margin-top: 20px;
+    }
+
+    .action-section label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .action-section textarea {
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        padding: 10px 14px;
+        font-size: 13.5px;
+        width: 100%;
+        resize: vertical;
+        min-height: 60px;
+        transition: all 0.2s ease;
+    }
+
+    .action-section textarea:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .btn-toggle-disable {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        border: none;
+        padding: 12px 32px;
+        border-radius: var(--radius-sm);
+        font-weight: 700;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .btn-toggle-disable:hover {
+        box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+        transform: translateY(-1px);
+        color: white;
+    }
+
+    .btn-toggle-enable {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        border: none;
+        padding: 12px 32px;
+        border-radius: var(--radius-sm);
+        font-weight: 700;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .btn-toggle-enable:hover {
+        box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+        transform: translateY(-1px);
+        color: white;
+    }
+
+    /* Log Section */
+    .log-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 28px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .log-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #8b5cf6, #a855f7);
+    }
+
+    .log-filters {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+
+    .log-filters .filter-group {
+        min-width: 140px;
+    }
+
+    .log-filters .filter-group label {
+        display: block;
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .log-filters .filter-group .form-control,
+    .log-filters .filter-group .form-select {
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .log-table-wrapper {
+        overflow-x: auto;
+    }
+
+    /* Spinner */
+    .search-spinner {
+        display: none;
+        width: 20px;
+        height: 20px;
+        border: 2px solid transparent;
+        border-top: 2px solid white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    /* Not Found */
+    .not-found-card {
+        background: var(--bg-card);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: var(--radius-lg);
+        padding: 40px;
+        text-align: center;
+        margin-bottom: 24px;
+        display: none;
+    }
+
+    .not-found-card.visible {
+        display: block;
+        animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .not-found-card i {
+        font-size: 48px;
+        color: var(--danger);
+        opacity: 0.5;
+    }
+
+    /* Stat mini cards */
+    .mini-stats {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+
+    .mini-stat {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 16px 20px;
+        flex: 1;
+        min-width: 150px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transition: all 0.3s ease;
+    }
+
+    .mini-stat:hover {
+        border-color: var(--border-glow);
+        transform: translateY(-2px);
+    }
+
+    .mini-stat .mini-stat-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+    }
+
+    .mini-stat .mini-stat-value {
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .mini-stat .mini-stat-label {
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+</style>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SEARCH SECTION -->
+<!-- ═══════════════════════════════════════ -->
+<div class="search-section">
+    <div class="section-title">
+        <div class="icon-box">
+            <i class="bi bi-person-lock"></i>
+        </div>
+        <div>
+            <h5>@(isAr ? "البحث عن حساب" : "Search Account")</h5>
+            <p>@(isAr ? "ابحث عن المستخدم في الدومين المحدد لعرض حالته وتعديلها" : "Search for a user in the selected domain to view and modify their status")</p>
+        </div>
+    </div>
+
+    <div class="search-row">
+        <div class="field-group" style="max-width: 380px;">
+            <label>@(isAr ? "الدومين" : "Domain")</label>
+            <div class="d-flex gap-2">
+                <select class="form-select" id="domainSelect">
+                    <option value="">@(isAr ? "-- اختر الدومين --" : "-- Select Domain --")</option>
+                    @foreach (var d in domains)
+                    {
+                        <option value="@d.Key">@d.DisplayName</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-accent btn-sm" onclick="openAddDomainModal()" title='@(isAr ? "إضافة دومين" : "Add Domain")' style="white-space:nowrap;padding:10px 14px;">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+                <button type="button" class="btn btn-outline-info btn-sm" id="btnEditDomain" onclick="openEditDomainModal()" title='@(isAr ? "تعديل الدومين (خاصية الجوال...)" : "Edit domain (mobile attribute…)")' style="white-space:nowrap;padding:10px 14px;display:none;">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="btnDeleteDomain" onclick="deleteSelectedDomain()" title='@(isAr ? "حذف الدومين" : "Delete Domain")' style="white-space:nowrap;padding:10px 14px;display:none;">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="field-group">
+            <label>@(isAr ? "اسم المستخدم (sAMAccountName)" : "Username (sAMAccountName)")</label>
+            <input type="text" class="form-control" id="samAccountInput"
+                   placeholder="@(isAr ? "أدخل اسم المستخدم..." : "Enter username...")"
+                   autocomplete="off" />
+        </div>
+        <div>
+            <button class="btn btn-glow d-flex align-items-center gap-2" id="searchBtn" onclick="searchUser()">
+                <i class="bi bi-search"></i>
+                <span>@(isAr ? "بحث" : "Search")</span>
+                <div class="search-spinner" id="searchSpinner"></div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- NOT FOUND MESSAGE -->
+<!-- ═══════════════════════════════════════ -->
+<div class="not-found-card" id="notFoundCard">
+    <i class="bi bi-person-x-fill d-block mb-3"></i>
+    <h5 class="mb-2" style="color: var(--danger);">@(isAr ? "المستخدم غير موجود" : "User Not Found")</h5>
+    <p class="text-muted mb-0" id="notFoundMessage"></p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- USER RESULT CARD -->
+<!-- ═══════════════════════════════════════ -->
+<div class="user-result-card" id="userResultCard">
+    <div class="d-flex align-items-center gap-16 mb-3" style="gap: 16px;">
+        <div class="user-avatar" id="userAvatar">
+            <i class="bi bi-person-fill"></i>
+        </div>
+        <div class="flex-grow-1">
+            <h4 class="mb-1 fw-700" id="userName" style="font-weight:700;"></h4>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="badge-status" id="userStatusBadge"></span>
+                <span class="text-muted fs-xs" id="userDomain"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="user-info-grid">
+        <div class="user-info-item">
+            <div class="info-label">@(isAr ? "اسم المستخدم" : "Username")</div>
+            <div class="info-value" id="infoUsername"></div>
+        </div>
+        <div class="user-info-item">
+            <div class="info-label">@(isAr ? "البريد الإلكتروني" : "Email")</div>
+            <div class="info-value" id="infoEmail"></div>
+        </div>
+        <div class="user-info-item">
+            <div class="info-label">@(isAr ? "رقم الهاتف" : "Phone")</div>
+            <div class="info-value" id="infoPhone"></div>
+        </div>
+        <div class="user-info-item">
+            <div class="info-label">@(isAr ? "القسم" : "Department")</div>
+            <div class="info-value" id="infoDepartment"></div>
+        </div>
+        <div class="user-info-item">
+            <div class="info-label">@(isAr ? "المسمى الوظيفي" : "Title")</div>
+            <div class="info-value" id="infoTitle"></div>
+        </div>
+        <div class="user-info-item">
+            <div class="info-label">@(isAr ? "الحالة" : "Status")</div>
+            <div class="info-value" id="infoStatus"></div>
+        </div>
+    </div>
+
+    <!-- Action Section -->
+    <div class="action-section">
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label for="reasonInput">@(isAr ? "سبب العملية *" : "Reason *")</label>
+                <textarea id="reasonInput" placeholder="@(isAr ? "أدخل سبب التعطيل أو التفعيل..." : "Enter the reason for disable/enable...")"></textarea>
+            </div>
+            <div class="col-md-4">
+                @* Read-only: the operator is taken from the signed-in session, not from this page.
+                   It was a free-text box, so the record of who disabled an account was whatever
+                   the browser sent — blank, or any name at all. *@
+                <label>@(isAr ? "اسم المنفّذ" : "Performed By")</label>
+                <div class="d-flex align-items-center gap-2"
+                     style="background:var(--bg-input);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);padding:10px 14px;font-size:13.5px;">
+                    <i class="bi bi-person-badge-fill text-accent"></i>
+                    <span class="fw-600">@(User.Identity?.Name ?? "—")</span>
+                </div>
+                <div class="fs-xs text-muted mt-1">
+                    <i class="bi bi-shield-lock me-1"></i>@(isAr ? "يُسجَّل تلقائياً من حساب الدخول" : "Recorded automatically from your session")
+                </div>
+            </div>
+        </div>
+
+        <!-- SMS Configuration -->
+        <hr class="my-4 opacity-10">
+        <h6 class="fw-700 mb-3"><i class="bi bi-chat-dots-fill me-2 text-success"></i>@(isAr ? "إشعار SMS" : "SMS Notification")</h6>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label for="smsProviderSelect" class="form-label">@(isAr ? "مزود SMS" : "SMS Provider")</label>
+                <select id="smsProviderSelect" class="form-select" style="background:var(--bg-input);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);padding:10px 14px;font-size:13.5px;">
+                    <option value="">@(isAr ? "-- بدون إرسال SMS --" : "-- No SMS --")</option>
+                </select>
+                <span class="fs-xs text-muted mt-1 d-block">
+                    @(isAr ? "أضف مزودين من" : "Add providers from ")
+                    <a href="@Url.Action("Index", "SmsCenter")" target="_blank">@(isAr ? "مركز الإشعارات" : "Notifications Center")</a>
+                </span>
+            </div>
+            <div class="col-md-4">
+                <label for="smsPhoneInput" class="form-label">@(isAr ? "رقم الجوال" : "Phone Number")</label>
+                <input type="text" id="smsPhoneInput" class="form-control"
+                       style="background:var(--bg-input);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);padding:10px 14px;font-size:13.5px;"
+                       placeholder="@(isAr ? "رقم الجوال (يتم تعبئته تلقائياً)" : "Phone (auto-filled from AD)")" />
+            </div>
+            <div class="col-12">
+                <label for="smsTemplateInput" class="form-label">@(isAr ? "قالب الرسالة" : "Message Template")</label>
+                <textarea id="smsTemplateInput" class="form-control" rows="2"
+                          style="background:var(--bg-input);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);padding:10px 14px;font-size:13.5px;resize:vertical;"
+                          placeholder="@(isAr ? "تم {ACTION} حسابك ({USERNAME}). السبب: {REASON}" : "Your account ({USERNAME}) has been {ACTION}. Reason: {REASON}")">@(isAr ? "تم {ACTION} حسابك ({USERNAME}). السبب: {REASON}" : "Your account ({USERNAME}) has been {ACTION}. Reason: {REASON}")</textarea>
+                <span class="fs-xs text-muted mt-1 d-block">@(isAr ? "المتغيرات: {USERNAME}, {DISPLAY_NAME}, {ACTION}, {REASON}" : "Variables: {USERNAME}, {DISPLAY_NAME}, {ACTION}, {REASON}")</span>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-3 mt-3" style="gap:12px;">
+            <button class="btn btn-toggle-disable" id="btnDisable" onclick="toggleStatus()" style="display:none;">
+                <i class="bi bi-shield-x me-2"></i>
+                @(isAr ? "تعطيل الحساب" : "Disable Account")
+            </button>
+            <button class="btn btn-toggle-enable" id="btnEnable" onclick="toggleStatus()" style="display:none;">
+                <i class="bi bi-shield-check me-2"></i>
+                @(isAr ? "تفعيل الحساب" : "Enable Account")
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- MINI STATS -->
+<!-- ═══════════════════════════════════════ -->
+<div class="mini-stats">
+    <div class="mini-stat">
+        <div class="mini-stat-icon" style="background:rgba(99,102,241,0.15);color:var(--accent-primary);">
+            <i class="bi bi-list-check"></i>
+        </div>
+        <div>
+            <div class="mini-stat-value text-gradient" id="statTotal">@logs.Count</div>
+            <div class="mini-stat-label">@(isAr ? "إجمالي العمليات" : "Total Operations")</div>
+        </div>
+    </div>
+    <div class="mini-stat">
+        <div class="mini-stat-icon" style="background:rgba(239,68,68,0.15);color:var(--danger);">
+            <i class="bi bi-shield-x"></i>
+        </div>
+        <div>
+            <div class="mini-stat-value" style="color:#f87171;" id="statDisabled">@logs.Count(l => l.Action == "Disable")</div>
+            <div class="mini-stat-label">@(isAr ? "عمليات تعطيل" : "Disable Ops")</div>
+        </div>
+    </div>
+    <div class="mini-stat">
+        <div class="mini-stat-icon" style="background:rgba(16,185,129,0.15);color:var(--success);">
+            <i class="bi bi-shield-check"></i>
+        </div>
+        <div>
+            <div class="mini-stat-value" style="color:#34d399;" id="statEnabled">@logs.Count(l => l.Action == "Enable")</div>
+            <div class="mini-stat-label">@(isAr ? "عمليات تفعيل" : "Enable Ops")</div>
+        </div>
+    </div>
+    <div class="mini-stat">
+        <div class="mini-stat-icon" style="background:rgba(245,158,11,0.15);color:var(--warning);">
+            <i class="bi bi-envelope-check"></i>
+        </div>
+        <div>
+            <div class="mini-stat-value" style="color:#fbbf24;" id="statSms">@logs.Count(l => l.SmsSent)</div>
+            <div class="mini-stat-label">@(isAr ? "رسائل SMS" : "SMS Sent")</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- LOG SECTION -->
+<!-- ═══════════════════════════════════════ -->
+<div class="log-section">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap" style="gap:12px;">
+        <div class="d-flex align-items-center gap-3">
+            <div class="icon-box" style="width:40px;height:40px;background:linear-gradient(135deg,#8b5cf6,#a855f7);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;color:white;">
+                <i class="bi bi-journal-text"></i>
+            </div>
+            <div>
+                <h5 class="mb-0 fw-600">@(isAr ? "سجل العمليات" : "Operations Log")</h5>
+                <small class="text-muted">@(isAr ? "جميع عمليات التعطيل والتفعيل" : "All enable/disable operations")</small>
+            </div>
+        </div>
+        <button class="btn btn-glass d-flex align-items-center gap-2" onclick="exportExcel()">
+            <i class="bi bi-file-earmark-excel"></i>
+            @(isAr ? "تصدير Excel" : "Export Excel")
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="log-filters">
+        <div class="filter-group" style="flex:1;">
+            <label>@(isAr ? "بحث" : "Search")</label>
+            <input type="text" class="form-control" id="logSearch" placeholder="@(isAr ? "اسم المستخدم أو الاسم..." : "Username or name...")" />
+        </div>
+        <div class="filter-group">
+            <label>@(isAr ? "العملية" : "Action")</label>
+            <select class="form-select" id="logAction">
+                <option value="">@(isAr ? "الكل" : "All")</option>
+                <option value="Disable">@(isAr ? "تعطيل" : "Disable")</option>
+                <option value="Enable">@(isAr ? "تفعيل" : "Enable")</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>@(isAr ? "من تاريخ" : "From")</label>
+            <input type="date" class="form-control" id="logDateFrom" />
+        </div>
+        <div class="filter-group">
+            <label>@(isAr ? "إلى تاريخ" : "To")</label>
+            <input type="date" class="form-control" id="logDateTo" />
+        </div>
+        <div>
+            <button class="btn btn-glass" onclick="loadLogs(1)">
+                <i class="bi bi-funnel"></i>
+                @(isAr ? "تصفية" : "Filter")
+            </button>
+        </div>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="log-table-wrapper">
+        <table class="table-glass" id="logsTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>@(isAr ? "اسم المستخدم" : "Username")</th>
+                    <th>@(isAr ? "الاسم" : "Name")</th>
+                    <th>@(isAr ? "الدومين" : "Domain")</th>
+                    <th>@(isAr ? "العملية" : "Action")</th>
+                    <th>@(isAr ? "السبب" : "Reason")</th>
+                    <th>@(isAr ? "SMS" : "SMS")</th>
+                    <th>@(isAr ? "المنفذ" : "By")</th>
+                    <th>@(isAr ? "التاريخ" : "Date")</th>
+                </tr>
+            </thead>
+            <tbody id="logsBody">
+                @if (logs.Count == 0)
+                {
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="bi bi-journal-text d-block mb-2" style="font-size:32px;opacity:0.3;"></i>
+                            @(isAr ? "لا توجد عمليات بعد" : "No operations yet")
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    var idx = 1;
+                    foreach (var log in logs)
+                    {
+                        <tr>
+                            <td>@idx</td>
+                            <td><strong>@log.SamAccountName</strong></td>
+                            <td>@log.DisplayName</td>
+                            <td><span class="badge-status badge-info">@log.Domain</span></td>
+                            <td>
+                                @if (log.Action == "Disable")
+                                {
+                                    <span class="badge-status badge-danger">@(isAr ? "تعطيل" : "Disable")</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-status badge-success">@(isAr ? "تفعيل" : "Enable")</span>
+                                }
+                            </td>
+                            <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="@log.Reason">@log.Reason</td>
+                            <td>
+                                @if (log.SmsSent)
+                                {
+                                    <span class="badge-status badge-success"><i class="bi bi-check-circle"></i></span>
+                                }
+                                else
+                                {
+                                    <span class="badge-status badge-muted"><i class="bi bi-x-circle"></i></span>
+                                }
+                            </td>
+                            <td>@log.PerformedBy</td>
+                            <td class="small text-muted">@log.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        </tr>
+                        idx++;
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="d-flex justify-content-between align-items-center mt-3" id="paginationArea">
+        <span class="text-muted fs-xs" id="paginationInfo"></span>
+        <div class="d-flex gap-2" id="paginationButtons"></div>
+    </div>
+</div>
+
+<!-- Add Domain Modal -->
+<div class="modal fade" id="addDomainModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content glass-card border-0">
+            <div class="modal-header border-0">
+                <h6 class="fw-700 mb-0" id="domainModalTitle">
+                    <i class="bi bi-plus-circle me-2 text-accent"></i>
+                    @(isAr ? "إضافة دومين مخصص" : "Add Custom Domain")
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">@(isAr ? "اسم الدومين" : "Display Name") <span class="text-danger">*</span></label>
+                    <input type="text" id="domDisplayName" class="form-control" placeholder="@(isAr ? "مثال: الجهة - الموظفين" : "e.g., Organization - Staff")" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">@(isAr ? "عنوان السيرفر" : "Server") <span class="text-danger">*</span></label>
+                    <input type="text" id="domServer" class="form-control" placeholder="dc01.domain.com" />
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-4">
+                        <label class="form-label">@(isAr ? "المنفذ" : "Port")</label>
+                        <input type="number" id="domPort" class="form-control" value="389" />
+                    </div>
+                    <div class="col-8">
+                        <label class="form-label">Base DN <span class="text-danger">*</span></label>
+                        <input type="text" id="domBaseDN" class="form-control" placeholder="DC=domain,DC=com" />
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label">@(isAr ? "اسم المستخدم" : "Username")</label>
+                        <input type="text" id="domUsername" class="form-control" placeholder="domain\admin" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">@(isAr ? "كلمة المرور" : "Password")</label>
+                        <input type="password" id="domPassword" class="form-control" />
+                        <small class="text-muted" id="domPasswordHint" style="display:none">@(isAr ? "اتركها فارغة للإبقاء على الحالية" : "Leave empty to keep current")</small>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">@(isAr ? "خاصية رقم الجوال في AD" : "AD Mobile-Number Attribute")</label>
+                    <input type="text" id="domPhoneAttribute" class="form-control" value="mobile" placeholder="mobile" />
+                    <small class="text-muted">@(isAr
+                        ? "السمة التي تحتوي رقم جوال المستخدم (مثل mobile أو telephoneNumber أو extensionAttribute13). يمكنك تغييرها لاحقاً من زرّ التعديل وحفظها."
+                        : "The attribute holding the user's mobile (e.g. mobile, telephoneNumber, extensionAttribute13). You can change it later via Edit and save.")</small>
+                </div>
+                <div id="addDomainResult" class="d-none"></div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-glass" data-bs-dismiss="modal">@(isAr ? "إلغاء" : "Cancel")</button>
+                <button type="button" class="btn btn-outline-info" id="btnTestDomain" onclick="testDomainConnection()">
+                    <i class="bi bi-plug-fill me-1"></i> @(isAr ? "اختبار الاتصال" : "Test Connection")
+                </button>
+                <button type="button" class="btn btn-accent" id="btnSaveDomain" onclick="saveDomain()">
+                    <i class="bi bi-check-lg me-1"></i> @(isAr ? "حفظ" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const isAr = @(isAr ? "true" : "false");
+    let currentUser = null;
+    let currentDomainKey = '';
+
+    // Anti-forgery token helper for AJAX requests
+    function getAntiForgeryToken() {
+        return document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+    }
+    function antiforgeryHeaders() {
+        return { 'RequestVerificationToken': getAntiForgeryToken() };
+    }
+
+    // ═══════════════════════════════════════
+    // SEARCH USER
+    // ═══════════════════════════════════════
+    function searchUser() {
+        const domain = document.getElementById('domainSelect').value;
+        const sam = document.getElementById('samAccountInput').value.trim();
+
+        if (!domain) {
+            showToast(isAr ? 'يجب اختيار الدومين' : 'Please select a domain', 'warning');
+            return;
+        }
+        if (!sam) {
+            showToast(isAr ? 'أدخل اسم المستخدم' : 'Enter a username', 'warning');
+            return;
+        }
+
+        // Show spinner
+        const btn = document.getElementById('searchBtn');
+        const spinner = document.getElementById('searchSpinner');
+        btn.disabled = true;
+        spinner.style.display = 'block';
+
+        // Hide previous results
+        document.getElementById('userResultCard').classList.remove('visible');
+        document.getElementById('notFoundCard').classList.remove('visible');
+
+        fetch('/AccountStatus/SearchUser', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, antiforgeryHeaders()),
+            body: JSON.stringify({ samAccountName: sam, domainKey: domain })
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+
+            if (data.success) {
+                currentUser = data.user;
+                currentDomainKey = domain;
+                displayUser(data.user);
+            } else {
+                document.getElementById('notFoundMessage').textContent = data.message;
+                document.getElementById('notFoundCard').classList.add('visible');
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+            showToast(isAr ? 'خطأ في الاتصال' : 'Connection error', 'error');
+        });
+    }
+
+    // ═══════════════════════════════════════
+    // DISPLAY USER
+    // ═══════════════════════════════════════
+    function displayUser(user) {
+        const card = document.getElementById('userResultCard');
+        const avatar = document.getElementById('userAvatar');
+
+        // Set card status class
+        card.className = 'user-result-card visible ' + (user.isDisabled ? 'status-disabled' : 'status-enabled');
+
+        // Avatar
+        avatar.className = 'user-avatar ' + (user.isDisabled ? 'disabled' : 'enabled');
+        avatar.innerHTML = user.isDisabled
+            ? '<i class="bi bi-person-x-fill"></i>'
+            : '<i class="bi bi-person-check-fill"></i>';
+
+        // Name
+        document.getElementById('userName').textContent = user.displayName || user.samAccountName;
+
+        // Status badge
+        const badge = document.getElementById('userStatusBadge');
+        if (user.isDisabled) {
+            badge.className = 'badge-status badge-danger';
+            badge.innerHTML = '<i class="bi bi-x-circle me-1"></i>' + (isAr ? 'معطّل' : 'Disabled');
+        } else {
+            badge.className = 'badge-status badge-success';
+            badge.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + (isAr ? 'مفعّل' : 'Enabled');
+        }
+
+        // Domain
+        document.getElementById('userDomain').textContent = user.domain;
+
+        // Info grid
+        document.getElementById('infoUsername').textContent = user.samAccountName;
+        document.getElementById('infoEmail').textContent = user.email || '—';
+        document.getElementById('infoPhone').textContent = user.phoneNumber || '—';
+        document.getElementById('infoDepartment').textContent = user.department || '—';
+        document.getElementById('infoTitle').textContent = user.title || '—';
+        document.getElementById('infoStatus').textContent = user.isDisabled
+            ? (isAr ? 'معطّل' : 'Disabled')
+            : (isAr ? 'مفعّل' : 'Enabled');
+
+        // Auto-fill phone number from AD
+        if (user.phoneNumber) {
+            document.getElementById('smsPhoneInput').value = user.phoneNumber;
+        }
+
+        // Toggle buttons
+        if (user.isDisabled) {
+            document.getElementById('btnDisable').style.display = 'none';
+            document.getElementById('btnEnable').style.display = 'inline-flex';
+        } else {
+            document.getElementById('btnDisable').style.display = 'inline-flex';
+            document.getElementById('btnEnable').style.display = 'none';
+        }
+
+        // Clear reason
+        document.getElementById('reasonInput').value = '';
+    }
+
+    // ═══════════════════════════════════════
+    // TOGGLE STATUS
+    // ═══════════════════════════════════════
+    function toggleStatus() {
+        if (!currentUser) return;
+
+        const reason = document.getElementById('reasonInput').value.trim();
+
+        if (!reason) {
+            showToast(isAr ? 'يجب إدخال السبب' : 'Reason is required', 'warning');
+            document.getElementById('reasonInput').focus();
+            return;
+        }
+
+        const action = currentUser.isDisabled ? (isAr ? 'تفعيل' : 'enable') : (isAr ? 'تعطيل' : 'disable');
+        if (!confirm(isAr
+            ? `هل تريد ${action} حساب ${currentUser.samAccountName}؟`
+            : `Are you sure you want to ${action} account ${currentUser.samAccountName}?`)) {
+            return;
+        }
+
+        // Disable buttons
+        document.getElementById('btnDisable').disabled = true;
+        document.getElementById('btnEnable').disabled = true;
+
+        fetch('/AccountStatus/ToggleStatus', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, antiforgeryHeaders()),
+            body: JSON.stringify({
+                samAccountName: currentUser.samAccountName,
+                domainKey: currentDomainKey,
+                reason: reason,
+                smsProviderId: document.getElementById('smsProviderSelect').value || null,
+                phoneNumber: document.getElementById('smsPhoneInput').value.trim(),
+                smsMessageTemplate: document.getElementById('smsTemplateInput').value.trim()
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('btnDisable').disabled = false;
+            document.getElementById('btnEnable').disabled = false;
+
+            if (data.success) {
+                showToast(data.message, 'success');
+
+                // Re-search to update display
+                searchUser();
+
+                // Reload logs
+                loadLogs(1);
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(err => {
+            document.getElementById('btnDisable').disabled = false;
+            document.getElementById('btnEnable').disabled = false;
+            showToast(isAr ? 'خطأ في الاتصال' : 'Connection error', 'error');
+        });
+    }
+
+    // ═══════════════════════════════════════
+    // LOAD LOGS
+    // ═══════════════════════════════════════
+    function loadLogs(page) {
+        const search = document.getElementById('logSearch').value;
+        const action = document.getElementById('logAction').value;
+        const dateFrom = document.getElementById('logDateFrom').value;
+        const dateTo = document.getElementById('logDateTo').value;
+
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (action) params.append('action', action);
+        if (dateFrom) params.append('dateFrom', dateFrom);
+        if (dateTo) params.append('dateTo', dateTo);
+        params.append('page', page);
+
+        fetch('/AccountStatus/GetLogs?' + params.toString())
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('logsBody');
+                tbody.innerHTML = '';
+
+                if (data.logs.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-5">
+                        <i class="bi bi-journal-text d-block mb-2" style="font-size:32px;opacity:0.3;"></i>
+                        ${isAr ? 'لا توجد نتائج' : 'No results'}</td></tr>`;
+                } else {
+                    data.logs.forEach((log, idx) => {
+                        const actionBadge = log.action === 'Disable'
+                            ? `<span class="badge-status badge-danger">${isAr ? 'تعطيل' : 'Disable'}</span>`
+                            : `<span class="badge-status badge-success">${isAr ? 'تفعيل' : 'Enable'}</span>`;
+
+                        const smsBadge = log.smsSent
+                            ? '<span class="badge-status badge-success"><i class="bi bi-check-circle"></i></span>'
+                            : '<span class="badge-status badge-muted"><i class="bi bi-x-circle"></i></span>';
+
+                        tbody.innerHTML += `<tr>
+                            <td>${(data.currentPage - 1) * 20 + idx + 1}</td>
+                            <td><strong>${log.samAccountName}</strong></td>
+                            <td>${log.displayName}</td>
+                            <td><span class="badge-status badge-info">${log.domain}</span></td>
+                            <td>${actionBadge}</td>
+                            <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${log.reason}">${log.reason}</td>
+                            <td>${smsBadge}</td>
+                            <td>${log.performedBy}</td>
+                            <td class="small text-muted">${log.timestamp}</td>
+                        </tr>`;
+                    });
+                }
+
+                // Update pagination
+                const infoEl = document.getElementById('paginationInfo');
+                infoEl.textContent = isAr
+                    ? `${data.totalCount} عملية — صفحة ${data.currentPage} من ${data.totalPages}`
+                    : `${data.totalCount} operations — Page ${data.currentPage} of ${data.totalPages}`;
+
+                const btnsEl = document.getElementById('paginationButtons');
+                btnsEl.innerHTML = '';
+                if (data.totalPages > 1) {
+                    for (let p = 1; p <= data.totalPages && p <= 10; p++) {
+                        const active = p === data.currentPage ? 'btn-glow' : 'btn-glass';
+                        btnsEl.innerHTML += `<button class="btn ${active} btn-sm" onclick="loadLogs(${p})">${p}</button>`;
+                    }
+                }
+
+                // Update stats
+                document.getElementById('statTotal').textContent = data.totalCount;
+            });
+    }
+
+    // ═══════════════════════════════════════
+    // EXPORT EXCEL
+    // ═══════════════════════════════════════
+    function exportExcel() {
+        const search = document.getElementById('logSearch').value;
+        const action = document.getElementById('logAction').value;
+        const dateFrom = document.getElementById('logDateFrom').value;
+        const dateTo = document.getElementById('logDateTo').value;
+
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (action) params.append('action', action);
+        if (dateFrom) params.append('dateFrom', dateFrom);
+        if (dateTo) params.append('dateTo', dateTo);
+
+        window.location.href = '/AccountStatus/ExportExcel?' + params.toString();
+    }
+
+    // ═══════════════════════════════════════
+    // KEYBOARD SHORTCUT (Enter to search)
+    // ═══════════════════════════════════════
+    document.getElementById('samAccountInput')?.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') searchUser();
+    });
+
+    // ═══════════════════════════════════════
+    // LOAD SMS PROVIDERS
+    // ═══════════════════════════════════════
+    async function loadSmsProviders() {
+        try {
+            const res = await fetch('/SmsCenter/GetProviders');
+            const data = await res.json();
+            const sel = document.getElementById('smsProviderSelect');
+            if (!sel) return;
+            data.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name + (p.senderName ? ' (' + p.senderName + ')' : '');
+                sel.appendChild(opt);
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    // ═══════════════════════════════════════
+    // ADD DOMAIN MODAL
+    // ═══════════════════════════════════════
+    // null = add mode, otherwise the id of the domain being edited
+    let editingDomainId = null;
+
+    function resetDomainModal() {
+        document.getElementById('addDomainResult').className = 'd-none';
+        document.getElementById('addDomainResult').innerHTML = '';
+        document.getElementById('btnSaveDomain').disabled = false;
+        document.getElementById('btnSaveDomain').innerHTML = '<i class="bi bi-check-lg me-1"></i> ' + (isAr ? 'حفظ' : 'Save');
+    }
+
+    function openAddDomainModal() {
+        editingDomainId = null;
+        document.getElementById('domDisplayName').value = '';
+        document.getElementById('domServer').value = '';
+        document.getElementById('domPort').value = '389';
+        document.getElementById('domBaseDN').value = '';
+        document.getElementById('domUsername').value = '';
+        document.getElementById('domPassword').value = '';
+        document.getElementById('domPhoneAttribute').value = 'mobile';
+        document.getElementById('domPasswordHint').style.display = 'none';
+        document.getElementById('domainModalTitle').innerHTML =
+            '<i class="bi bi-plus-circle me-2 text-accent"></i>' + (isAr ? 'إضافة دومين مخصص' : 'Add Custom Domain');
+        resetDomainModal();
+        new bootstrap.Modal(document.getElementById('addDomainModal')).show();
+    }
+
+    // Edit the selected domain — mainly to switch the mobile-number attribute and save.
+    async function openEditDomainModal() {
+        const key = document.getElementById('domainSelect').value;
+        if (!key || !key.startsWith('custom-')) return;
+        const id = parseInt(key.replace('custom-', ''));
+
+        try {
+            const res = await fetch('/AccountStatus/GetDomain?id=' + id);
+            const data = await res.json();
+            if (!data.success) { showToast(data.message || (isAr ? 'تعذّر جلب الدومين' : 'Could not load domain'), 'error'); return; }
+
+            const d = data.domain;
+            editingDomainId = d.id;
+            document.getElementById('domDisplayName').value = d.displayName || '';
+            document.getElementById('domServer').value = d.server || '';
+            document.getElementById('domPort').value = d.port || 389;
+            document.getElementById('domBaseDN').value = d.baseDN || '';
+            document.getElementById('domUsername').value = d.username || '';
+            document.getElementById('domPassword').value = '';           // blank = keep current
+            document.getElementById('domPhoneAttribute').value = d.phoneAttribute || 'mobile';
+            document.getElementById('domPasswordHint').style.display = '';
+            document.getElementById('domainModalTitle').innerHTML =
+                '<i class="bi bi-pencil me-2 text-accent"></i>' + (isAr ? 'تعديل الدومين' : 'Edit Domain');
+            resetDomainModal();
+            new bootstrap.Modal(document.getElementById('addDomainModal')).show();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    async function saveDomain() {
+        const displayName = document.getElementById('domDisplayName').value.trim();
+        const server = document.getElementById('domServer').value.trim();
+        const port = parseInt(document.getElementById('domPort').value) || 389;
+        const baseDN = document.getElementById('domBaseDN').value.trim();
+        const username = document.getElementById('domUsername').value.trim();
+        const password = document.getElementById('domPassword').value;
+        const phoneAttribute = document.getElementById('domPhoneAttribute').value.trim();
+        const resultDiv = document.getElementById('addDomainResult');
+        const btn = document.getElementById('btnSaveDomain');
+
+        if (!displayName) { showToast(isAr ? 'يرجى إدخال اسم الدومين' : 'Enter domain name', 'error'); return; }
+        if (!server) { showToast(isAr ? 'يرجى إدخال عنوان السيرفر' : 'Enter server address', 'error'); return; }
+        if (!baseDN) { showToast(isAr ? 'يرجى إدخال Base DN' : 'Enter Base DN', 'error'); return; }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+        const isEdit = editingDomainId !== null;
+        const url = isEdit ? '/AccountStatus/UpdateDomain' : '/AccountStatus/SaveDomain';
+        const payload = { displayName, server, port, baseDN, username, password, phoneAttribute };
+        if (isEdit) payload.id = editingDomainId;
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, antiforgeryHeaders()),
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                resultDiv.className = 'alert alert-success py-2 fs-sm';
+                resultDiv.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> ' +
+                    (isEdit ? (isAr ? 'تم حفظ التعديل بنجاح' : 'Changes saved successfully')
+                            : (isAr ? 'تم إضافة الدومين بنجاح' : 'Domain added successfully'));
+
+                const sel = document.getElementById('domainSelect');
+                if (isEdit) {
+                    // Refresh the selected option's label in place
+                    const opt = sel.querySelector('option[value="custom-' + editingDomainId + '"]');
+                    if (opt) opt.textContent = displayName + ' (' + server + ')';
+                } else {
+                    const opt = document.createElement('option');
+                    opt.value = 'custom-' + data.domain.id;
+                    opt.textContent = data.domain.displayName + ' (' + data.domain.server + ')';
+                    opt.selected = true;
+                    sel.appendChild(opt);
+                }
+
+                setTimeout(() => {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addDomainModal'));
+                    if (modal) modal.hide();
+                }, 1200);
+            } else {
+                resultDiv.className = 'alert alert-danger py-2 fs-sm';
+                resultDiv.innerHTML = '<i class="bi bi-exclamation-circle-fill me-1"></i> ' + (data.message || (isAr ? 'فشل الإضافة' : 'Failed'));
+            }
+        } catch (e) {
+            resultDiv.className = 'alert alert-danger py-2 fs-sm';
+            resultDiv.innerHTML = '<i class="bi bi-exclamation-circle-fill me-1"></i> ' + e.message;
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> ' + (isAr ? 'حفظ' : 'Save');
+    }
+
+    // ═══════════════════════════════════════
+    // TEST DOMAIN CONNECTION
+    // ═══════════════════════════════════════
+    async function testDomainConnection() {
+        const server = document.getElementById('domServer').value.trim();
+        const port = parseInt(document.getElementById('domPort').value) || 389;
+        const baseDN = document.getElementById('domBaseDN').value.trim();
+        const username = document.getElementById('domUsername').value.trim();
+        const password = document.getElementById('domPassword').value;
+        const resultDiv = document.getElementById('addDomainResult');
+        const btn = document.getElementById('btnTestDomain');
+
+        if (!server) { showToast(isAr ? 'يرجى إدخال عنوان السيرفر' : 'Enter server address', 'error'); return; }
+        if (!baseDN) { showToast(isAr ? 'يرجى إدخال Base DN' : 'Enter Base DN', 'error'); return; }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+        try {
+            const res = await fetch('/AccountStatus/TestDomainConnection', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, antiforgeryHeaders()),
+                body: JSON.stringify({ server, port, baseDN, username, password })
+            });
+            const data = await res.json();
+
+            resultDiv.className = data.success ? 'alert alert-success py-2 fs-sm' : 'alert alert-danger py-2 fs-sm';
+            resultDiv.innerHTML = data.success
+                ? '<i class="bi bi-check-circle-fill me-1"></i> ' + (isAr ? 'تم الاتصال بنجاح' : 'Connection successful')
+                : '<i class="bi bi-exclamation-circle-fill me-1"></i> ' + (data.message || (isAr ? 'فشل الاتصال' : 'Connection failed'));
+        } catch (e) {
+            resultDiv.className = 'alert alert-danger py-2 fs-sm';
+            resultDiv.innerHTML = '<i class="bi bi-exclamation-circle-fill me-1"></i> ' + e.message;
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug-fill me-1"></i> ' + (isAr ? 'اختبار الاتصال' : 'Test Connection');
+    }
+
+    // ═══════════════════════════════════════
+    // DELETE CUSTOM DOMAIN
+    // ═══════════════════════════════════════
+    async function deleteSelectedDomain() {
+        const sel = document.getElementById('domainSelect');
+        const val = sel.value;
+        if (!val || !val.startsWith('custom-')) {
+            showToast(isAr ? 'لا يمكن حذف هذا الدومين' : 'Cannot delete this domain', 'warning');
+            return;
+        }
+        const id = parseInt(val.replace('custom-', ''));
+        if (!confirm(isAr ? 'هل أنت متأكد من حذف هذا الدومين؟' : 'Are you sure you want to delete this domain?')) return;
+
+        try {
+            const token = getAntiForgeryToken();
+            const res = await fetch('/AccountStatus/DeleteDomain', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/x-www-form-urlencoded' }, antiforgeryHeaders()),
+                body: 'id=' + id
+            });
+            const data = await res.json();
+            if (data.success) {
+                sel.remove(sel.selectedIndex);
+                sel.value = '';
+                document.getElementById('btnDeleteDomain').style.display = 'none';
+                document.getElementById('btnEditDomain').style.display = 'none';
+                showToast(isAr ? 'تم حذف الدومين' : 'Domain deleted', 'success');
+            } else {
+                showToast(data.message || (isAr ? 'فشل الحذف' : 'Delete failed'), 'error');
+            }
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    // Show/hide edit + delete buttons when domain selection changes
+    document.getElementById('domainSelect').addEventListener('change', function() {
+        const isCustom = this.value.startsWith('custom-');
+        document.getElementById('btnDeleteDomain').style.display = isCustom ? '' : 'none';
+        document.getElementById('btnEditDomain').style.display = isCustom ? '' : 'none';
+    });
+
+    // Load on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        loadLogs(1);
+        loadSmsProviders();
+    });
+</script>
+}

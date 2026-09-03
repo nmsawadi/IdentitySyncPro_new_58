@@ -1,0 +1,119 @@
+@model IdentitySyncPro.Core.Models.Settings.EmailProvider
+@{
+    var isAr = (ViewBag.Lang as string ?? "ar") == "ar";
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? (isAr ? "مزود بريد جديد" : "New Email Provider") : (isAr ? "تعديل مزود البريد" : "Edit Email Provider");
+    string SelMode(string v) => Model.Mode == v ? "selected" : null;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h5 class="fw-700 mb-0"><i class="bi bi-envelope-at-fill me-2 text-accent"></i>@ViewData["Title"]</h5>
+    <a href="@Url.Action("Index")" class="btn btn-glass"><i class="bi bi-arrow-@(isAr ? "right" : "left") me-1"></i>@(isAr ? "رجوع" : "Back")</a>
+</div>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger glass-card border-0">
+        @foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors)) { <div>@e.ErrorMessage</div> }
+    </div>
+}
+
+<form method="post" action="@Url.Action("Save")" class="glass-card border-0 p-4">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="Id" value="@Model.Id" />
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label fw-600">@(isAr ? "اسم الإعداد" : "Name") *</label>
+            <input name="Name" value="@Model.Name" class="form-control" required placeholder="@(isAr ? "مثال: M365 مُصادق" : "e.g. M365 Authenticated")" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-600">@(isAr ? "الطريقة" : "Method")</label>
+            <select name="Mode" id="mode" class="form-select" onchange="toggleAuth()">
+                <option value="Authenticated" selected="@SelMode("Authenticated")">@(isAr ? "SMTP مُصادق (مستخدم/كلمة مرور)" : "Authenticated SMTP (username/password)")</option>
+                <option value="DirectSend" selected="@SelMode("DirectSend")">@(isAr ? "إرسال مباشر (بلا مصادقة — داخلي)" : "Direct Send (no auth — internal)")</option>
+            </select>
+        </div>
+
+        <div class="col-12">
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-glass" onclick="preset('auth')"><i class="bi bi-magic me-1"></i>@(isAr ? "تعبئة M365 مُصادق" : "Fill M365 Authenticated")</button>
+                <button type="button" class="btn btn-sm btn-glass" onclick="preset('direct')"><i class="bi bi-magic me-1"></i>@(isAr ? "تعبئة M365 إرسال مباشر" : "Fill M365 Direct Send")</button>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <label class="form-label fw-600">@(isAr ? "خادم SMTP" : "SMTP Host") *</label>
+            <input name="SmtpHost" id="host" value="@Model.SmtpHost" class="form-control" required placeholder="smtp.office365.com" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label fw-600">@(isAr ? "المنفذ" : "Port")</label>
+            <input type="number" name="SmtpPort" id="port" value="@(Model.SmtpPort == 0 ? 587 : Model.SmtpPort)" class="form-control" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label fw-600">SSL</label>
+            <div class="form-check form-switch mt-2"><input class="form-check-input" type="checkbox" name="EnableSsl" value="true" @(Model.EnableSsl ? "checked" : "") /></div>
+        </div>
+
+        <div class="col-12 auth-field">
+            <div class="alert alert-warning py-2 px-3 mb-0 small">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                @(isAr
+                    ? "تنبيه: أوقفت Microsoft المصادقة الأساسية (اسم مستخدم/كلمة مرور) لـ SMTP في Exchange Online نهائياً (مارس 2026) — هذه الطريقة لن تعمل مع smtp.office365.com. استخدم «الإرسال المباشر» للمستلمين الداخليين."
+                    : "Note: Microsoft permanently retired Basic auth (username/password) for SMTP in Exchange Online (March 2026) — this method no longer works with smtp.office365.com. Use Direct Send for internal recipients.")
+            </div>
+        </div>
+        <div class="col-md-6 auth-field">
+            <label class="form-label fw-600">@(isAr ? "اسم المستخدم" : "Username")</label>
+            <input name="Username" value="@Model.Username" class="form-control" autocomplete="off" placeholder="account@example.com" />
+        </div>
+        <div class="col-md-6 auth-field">
+            <label class="form-label fw-600">@(isAr ? "كلمة المرور (App Password)" : "Password (App Password)")</label>
+            <input type="password" name="Password" value="" autocomplete="new-password" class="form-control" placeholder="@(isNew ? "" : (isAr ? "اتركه فارغاً للإبقاء على الحالية" : "leave blank to keep current"))" />
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-600">@(isAr ? "بريد المُرسِل (From)" : "From Email")</label>
+            <input name="FromEmail" value="@Model.FromEmail" class="form-control" placeholder="noreply@example.com" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-600">@(isAr ? "اسم المُرسِل" : "From Name")</label>
+            <input name="FromName" value="@(Model.FromName ?? "IdentitySyncPro")" class="form-control" />
+        </div>
+
+        <div class="col-12">
+            <label class="form-label fw-600">@(isAr ? "ملاحظات" : "Notes")</label>
+            <input name="Notes" value="@Model.Notes" class="form-control" />
+        </div>
+        <div class="col-12">
+            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="IsActive" value="true" @(Model.IsActive ? "checked" : "") id="isActive" /><label class="form-check-label" for="isActive">@(isAr ? "فعّال (يُستخدم لإرسال البريد)" : "Active (used for sending email)")</label></div>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-accent"><i class="bi bi-check-lg me-1"></i>@(isAr ? "حفظ" : "Save")</button>
+        <a href="@Url.Action("Index")" class="btn btn-glass">@(isAr ? "إلغاء" : "Cancel")</a>
+    </div>
+</form>
+
+@section Scripts {
+<script>
+    function toggleAuth() {
+        const auth = document.getElementById('mode').value === 'Authenticated';
+        document.querySelectorAll('.auth-field').forEach(f => f.style.display = auth ? '' : 'none');
+    }
+    function preset(kind) {
+        const mode = document.getElementById('mode');
+        if (kind === 'auth') { mode.value = 'Authenticated'; document.getElementById('host').value = 'smtp.office365.com'; document.getElementById('port').value = 587; }
+        else { mode.value = 'DirectSend'; document.getElementById('port').value = 25;
+               // M365 tenant MX endpoint follows a fixed convention: dots in the domain become dashes.
+               const from = document.querySelector('[name="FromEmail"]').value;
+               const domain = from.includes('@@') ? from.split('@@')[1].trim() : '';
+               document.getElementById('host').value = domain
+                   ? domain.replaceAll('.', '-') + '.mail.protection.outlook.com'
+                   : 'yourtenant-com.mail.protection.outlook.com'; }
+        toggleAuth();
+    }
+    toggleAuth();
+</script>
+}

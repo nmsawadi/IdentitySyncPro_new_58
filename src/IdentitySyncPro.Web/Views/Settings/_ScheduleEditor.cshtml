@@ -1,0 +1,72 @@
+@{
+    var prefix = ViewData["Prefix"] as string ?? "FullSync";
+    var mode = ViewData["Mode"] as string ?? "daily";
+    var time = ViewData["Time"] as string ?? "02:00";
+    var days = ViewData["Days"] as string ?? "";
+    var interval = ViewData["Interval"] is int i ? i : 30;
+    var cron = ViewData["Cron"] as string ?? "0 2 * * *";
+    var isAr = ViewData["IsAr"] is bool b && b;
+    var activeDays = days.Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+    string[] dayLabelsAr = { "أحد", "إثن", "ثلا", "أرب", "خمي", "جمع", "سبت" };
+    string[] dayLabelsEn = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+}
+
+<div data-schedule-prefix="@prefix">
+    <input type="hidden" name="@(prefix)Mode" id="@(prefix)Mode" value="@mode" />
+    <input type="hidden" name="@(prefix)Schedule" id="@(prefix)Schedule" value="@cron" />
+    <input type="hidden" name="@(prefix)Days" id="@(prefix)Days" value="@days" />
+
+    <!-- Mode Selector -->
+    <div class="sched-mode-selector mb-3">
+        <button type="button" class="sched-mode-btn @(mode == "interval" ? "active" : "")" data-mode="interval" onclick="selectScheduleMode('@prefix','interval')">
+            <i class="bi bi-stopwatch"></i> @(isAr ? "كل فترة" : "Interval")
+        </button>
+        <button type="button" class="sched-mode-btn @(mode == "daily" ? "active" : "")" data-mode="daily" onclick="selectScheduleMode('@prefix','daily')">
+            <i class="bi bi-sun"></i> @(isAr ? "يومياً" : "Daily")
+        </button>
+        <button type="button" class="sched-mode-btn @(mode == "weekly" ? "active" : "")" data-mode="weekly" onclick="selectScheduleMode('@prefix','weekly')">
+            <i class="bi bi-calendar-week"></i> @(isAr ? "أسبوعياً" : "Weekly")
+        </button>
+    </div>
+
+    <!-- Interval Panel -->
+    <div id="@(prefix)_interval_panel" class="sched-panel" style="display:@(mode == "interval" ? "" : "none")">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fs-sm">@(isAr ? "كل" : "Every")</span>
+            <input type="number" name="@(prefix)IntervalMinutes" id="@(prefix)IntervalMinutes" value="@interval" min="1" max="1440" class="form-control" style="width:100px" onchange="updateCronPreview('@prefix')" />
+            <span class="fs-sm">@(isAr ? "دقيقة" : "minutes")</span>
+        </div>
+    </div>
+
+    <!-- Daily Panel -->
+    <div id="@(prefix)_daily_panel" class="sched-panel" style="display:@(mode == "daily" ? "" : "none")">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fs-sm">@(isAr ? "الساعة" : "At")</span>
+            <input type="time" name="@(prefix)Time" id="@(prefix)Time" value="@time" class="form-control" style="width:150px" onchange="updateCronPreview('@prefix')" />
+        </div>
+    </div>
+
+    <!-- Weekly Panel -->
+    <div id="@(prefix)_weekly_panel" class="sched-panel" style="display:@(mode == "weekly" ? "" : "none")">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="fs-sm">@(isAr ? "الساعة" : "At")</span>
+            <input type="time" name="@(prefix)Time" id="@(prefix)TimeWeekly" value="@time" class="form-control" style="width:150px" onchange="updateCronPreview('@prefix')" />
+        </div>
+        <div class="day-selector">
+            @for (int d = 0; d < 7; d++)
+            {
+                var isActive = activeDays.Contains(d.ToString());
+                <button type="button" class="day-btn @(isActive ? "active" : "")" data-day="@d" onclick="toggleDay(this,'@prefix')">
+                    @(isAr ? dayLabelsAr[d] : dayLabelsEn[d])
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Cron Preview -->
+    <div class="sched-cron-preview mt-2">
+        <i class="bi bi-info-circle"></i>
+        <span id="@(prefix)_cron_desc" class="fs-xs text-muted"></span>
+        <code class="ms-2 fs-xs" id="@(prefix)_cron_raw">@cron</code>
+    </div>
+</div>
